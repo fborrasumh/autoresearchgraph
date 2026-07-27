@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoResearchGraph — Mejora de documentos como DAG de commits (Karpathy)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window['pdfjsLib'])pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<style>
+:root{
+  --paper:#F4F6F5; --card:#FFFFFF; --ink:#1B2430; --ink-soft:#4A5568;
+  --line:#DCE2DF; --accent:#0E7C66; --accent-soft:#E3F1ED;
+  --revert:#C2452D; --revert-soft:#F9E9E5; --warn:#A9760B; --warn-soft:#FBF3DF;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --disp:'Space Grotesk',var(--body);
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:32px 32px;background-attachment:fixed}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* header */
+header{background:#13201C;color:#EDF3F0;padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(19,32,28,.25)}
+header .logo{font-family:var(--disp);font-weight:700;font-size:1.25rem;letter-spacing:.01em}
+header .logo span{color:#7BD4C0}
+header .ver{font-family:var(--mono);font-size:.7rem;background:#1E332C;padding:2px 8px;border-radius:20px;color:#9DC7BA}
+header .spacer{flex:1}
+.keychip{font-family:var(--mono);font-size:.72rem;padding:4px 10px;border-radius:20px;border:1px solid #2C4A40;color:#9DC7BA}
+.keychip.ok{border-color:#2E7D63;color:#7BD4C0}
+.costlive{font-family:var(--mono);font-size:.72rem;color:#C8D8D1}
+header a{color:#9DC7BA;font-size:.78rem;text-decoration:none;border-bottom:1px dotted #4A6B5E}
+header a:hover{color:#D9EDE5}
+
+/* tabs */
+nav.tabs{display:flex;gap:2px;padding:10px 18px 0;flex-wrap:wrap;max-width:1180px;margin:0 auto}
+nav.tabs button{font-family:var(--disp);font-size:.82rem;font-weight:600;padding:9px 14px;border:1px solid var(--line);border-bottom:none;background:#EBEFEC;color:var(--ink-soft);border-radius:var(--r) var(--r) 0 0;cursor:pointer}
+nav.tabs button.active{background:var(--card);color:var(--ink);border-color:var(--line);position:relative}
+nav.tabs button.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--card)}
+nav.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+main{max-width:1180px;margin:0 auto;padding:0 18px 60px}
+section.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:0 var(--r) var(--r) var(--r);padding:26px}
+section.panel.show{display:block;animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
+
+h2{font-family:var(--disp);font-size:1.15rem;margin-bottom:4px}
+h3{font-family:var(--disp);font-size:.95rem;margin:20px 0 8px}
+.sub{color:var(--ink-soft);font-size:.85rem;margin-bottom:18px}
+.hint{font-size:.78rem;color:var(--ink-soft);margin-top:4px}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:16px;background:#FCFDFC}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:760px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+
+label{display:block;font-size:.78rem;font-weight:600;margin-bottom:4px;color:var(--ink)}
+input[type=text],input[type=password],input[type=number],select,textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-family:var(--body);font-size:.88rem;background:#fff;color:var(--ink)}
+textarea{font-family:var(--mono);font-size:.8rem;min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:flex;gap:8px;align-items:center;font-size:.82rem;font-weight:500}
+.chk input{width:auto}
+
+button.btn{font-family:var(--disp);font-weight:600;font-size:.85rem;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button.btn:hover{border-color:var(--accent);color:var(--accent)}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.btn.primary:hover{background:#0B6B58;color:#fff}
+button.btn.danger{background:var(--revert);border-color:var(--revert);color:#fff}
+button.btn.ghost{background:transparent}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mini{font-size:.72rem;padding:4px 9px}
+
+.notice{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 12px;border-radius:0 8px 8px 0;font-size:.82rem;margin:10px 0}
+.notice.warn{border-color:var(--warn);background:var(--warn-soft)}
+.notice.bad{border-color:var(--revert);background:var(--revert-soft)}
+
+/* dropzone */
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:34px;text-align:center;cursor:pointer;background:#FCFDFC}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .big{font-size:1.8rem}
+.preview{font-family:var(--mono);font-size:.74rem;background:#F2F5F3;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;max-height:150px;overflow:auto;margin-top:10px}
+
+/* rubric */
+.tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px}
+.tpls button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 6px;font-size:.75rem;cursor:pointer;font-family:var(--body)}
+.tpls button .em{font-size:1.2rem;display:block}
+.tpls button:hover,.tpls button.sel{border-color:var(--accent);background:var(--accent-soft)}
+.crit{display:grid;grid-template-columns:26px 1.1fr 2fr 96px 72px 30px;gap:8px;align-items:start;padding:8px 0;border-bottom:1px dashed var(--line)}
+.crit .cid{font-family:var(--mono);font-size:.75rem;padding-top:9px;color:var(--ink-soft)}
+@media(max-width:760px){.crit{grid-template-columns:1fr;gap:4px}}
+.wsum{font-family:var(--mono);font-weight:600}
+.wsum.ok{color:var(--accent)}.wsum.bad{color:var(--revert)}
+.eyebtn{background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;padding:6px;font-size:.85rem}
+.eyebtn.hid{background:var(--warn-soft);border-color:var(--warn)}
+
+/* gates signature element */
+.gates{display:inline-flex;gap:3px;font-family:var(--mono);font-size:.62rem}
+.gate{padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--ink-soft);background:#fff}
+.gate.pass{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.gate.fail{background:var(--revert-soft);border-color:var(--revert);color:var(--revert)}
+.gate.skip{opacity:.45}
+
+/* experiments table */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table.exp{width:100%;border-collapse:collapse;font-size:.76rem;min-width:840px}
+table.exp th{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:8px;background:#13201C;color:#C8D8D1;position:sticky;top:0}
+table.exp td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.exp tr:nth-child(even) td{background:#FAFBFA}
+.badge{font-family:var(--mono);font-size:.64rem;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.badge.keep{background:var(--accent-soft);color:var(--accent)}
+.badge.rev{background:var(--revert-soft);color:var(--revert)}
+.badge.blk{background:var(--warn-soft);color:var(--warn)}
+.badge.inv{background:#EEE;color:var(--ink-soft)}
+.mono{font-family:var(--mono)}
+.diffcell{max-width:280px}
+del{background:var(--revert-soft);text-decoration:line-through;color:var(--revert)}
+ins{background:var(--accent-soft);text-decoration:none;color:var(--accent)}
+details.dif summary{cursor:pointer;font-size:.72rem;color:var(--ink-soft)}
+details.dif pre{white-space:pre-wrap;font-size:.7rem;margin-top:4px}
+
+/* log */
+#livelog{font-family:var(--mono);font-size:.72rem;background:#13201C;color:#C8D8D1;border-radius:8px;padding:12px;max-height:320px;overflow:auto;white-space:pre-wrap}
+#livelog .ok{color:#7BD4C0}#livelog .ko{color:#F0A08C}#livelog .wr{color:#E5C878}
+.statbar{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.78rem;margin:12px 0}
+.statbar b{font-size:1.05rem;display:block;color:var(--ink)}
+.statbar span{color:var(--ink-soft);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em}
+canvas.chart{width:100%;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+
+/* prompts */
+.agentbox{border:1px solid var(--line);border-radius:var(--r);margin-bottom:16px;overflow:hidden}
+.agentbox .ah{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F2F5F3;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.agentbox .ah b{font-family:var(--disp)}
+.agentbox .ab{padding:12px 14px}
+.vars{font-family:var(--mono);font-size:.68rem;color:var(--ink-soft);margin-bottom:8px}
+.jsonfix{font-family:var(--mono);font-size:.7rem;background:var(--warn-soft);border:1px dashed var(--warn);border-radius:6px;padding:8px;margin-top:8px}
+
+/* footer / misc */
+.stepnav{display:flex;justify-content:space-between;margin-top:22px}
+.pill{font-family:var(--mono);font-size:.68rem;background:#EEF2F0;border:1px solid var(--line);padding:2px 8px;border-radius:20px}
+.srcitem{border-bottom:1px dashed var(--line);padding:8px 0;font-size:.8rem}
+.srcitem a{color:var(--accent)}
+.leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:.72rem;color:var(--ink-soft);margin-top:8px}
+.leyenda span{display:flex;align-items:center;gap:5px}
+.leyenda i{width:11px;height:11px;border-radius:50%;display:inline-block}
+#chGraph{cursor:pointer;background:#fff}
+#nodedetail:empty{display:none}
+#restorebar{background:var(--warn-soft);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;margin:14px auto;max-width:1180px;display:none;align-items:center;gap:12px;font-size:.84rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🕸 Auto<span>ResearchGraph</span></div>
+  <div class="ver">DAG de commits · loop auditable</div>
+  <div class="spacer"></div>
+  <div class="costlive" id="costlive">0 llamadas · 0 tokens · $0.0000</div>
+  <div class="keychip" id="keychip">Sin configurar</div>
+  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">🔑 Obtener API Key</a>
+  <a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">📚 karpathy/autoresearch</a>
+</header>
+
+<div id="restorebar">
+  🕐 Hay una sesión guardada.
+  <button class="btn mini primary" id="btnRestore">Restaurar sesión</button>
+  <button class="btn mini ghost" id="btnDiscard">Descartar</button>
+</div>
+
+<nav class="tabs" id="tabs">
+  <button data-t="config" class="active">⚙️ Configuración</button>
+  <button data-t="rubrica">📋 Rúbrica</button>
+  <button data-t="ejecutar">▶ Ejecutar</button>
+  <button data-t="grafo">🕸 Grafo</button>
+  <button data-t="resultados">📊 Resultados</button>
+  <button data-t="documento">📄 Documento final</button>
+  <button data-t="agentes">🤖 Agentes &amp; Prompts</button>
+  <button data-t="busquedas">🔍 Búsquedas</button>
+  <button data-t="meta">🧠 Meta</button>
+</nav>
+
+<main>
+<!-- ══════════ CONFIG ══════════ -->
+<section class="panel show" id="p-config">
+  <h2>Configuración</h2>
+  <p class="sub">Sube tu documento, configura el loop y las salvaguardas. Paso 1 de 3.</p>
+
+  <div class="card">
+    <h3 style="margin-top:0">🔑 OpenAI API Key <span class="pill">🔒 solo en tu navegador</span></h3>
+    <div class="row">
+      <input type="password" id="apikey" placeholder="sk-..." style="flex:1;min-width:220px" autocomplete="off">
+      <button class="btn mini" id="btnEye" aria-label="Mostrar u ocultar la key">👁</button>
+      <button class="btn mini" id="btnKeyDel" aria-label="Borrar la key">🗑</button>
+    </div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="keyPersist"> Guardar en localStorage (clave <code>ia_openai_key</code>, persiste entre sesiones)</label>
+    <p class="hint">✅ Las llamadas van directamente de tu navegador a api.openai.com. Nunca pasan por ningún servidor.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">📁 Documento a mejorar</h3>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Subir documento">
+      <div class="big">📄</div>
+      <b>Arrastra tu documento aquí</b>
+      <div class="hint">O haz clic para seleccionar · .txt · .md · .docx · .pdf</div>
+      <input type="file" id="fileinput" accept=".txt,.md,.docx,.pdf" class="sr">
+    </div>
+    <div id="docinfo" class="hint"></div>
+    <div class="preview" id="docpreview" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">🎯 Parámetros del loop</h3>
+    <div class="grid4">
+      <div><label for="pObjetivo">Score objetivo</label><input type="number" id="pObjetivo" min="1" max="10" step="0.1" value="8.5"><p class="hint">El loop para al alcanzarlo.</p></div>
+      <div><label for="pMaxIter">Iteraciones máx.</label><input type="number" id="pMaxIter" min="1" max="30" value="10"></div>
+      <div><label for="pMargen">Margen de aceptación Δ</label><input type="number" id="pMargen" min="0" max="2" step="0.05" value="0.15"><p class="hint">Mejoras menores se revierten: el ruido no es señal.</p></div>
+      <div><label for="pEpsilon">ε Pareto</label><input type="number" id="pEpsilon" min="0" max="2" step="0.05" value="0.3"><p class="hint">Caída máx. permitida por criterio.</p></div>
+      <div><label for="pK">K hipótesis por iteración</label><select id="pK"><option>1</option><option selected>2</option><option>3</option></select></div>
+      <div><label for="pN">Movimiento estructural cada N</label><input type="number" id="pN" min="0" max="15" value="5"><p class="hint">0 = desactivado.</p></div>
+      <div><label for="pM">Parada por estancamiento M</label><input type="number" id="pM" min="2" max="15" value="4"><p class="hint">Iteraciones seguidas sin conservar.</p></div>
+      <div><label for="pMed">Evaluaciones por mediana</label><select id="pMed"><option>1</option><option selected>3</option><option>5</option></select><p class="hint" id="medwarn"></p></div>
+      <div><label for="pModEval">Modelo Evaluador / Juez</label><select id="pModEval"><option value="gpt-4o">gpt-4o (juez fiable)</option><option value="gpt-4o-mini">gpt-4o-mini</option></select></div>
+      <div><label for="pModExp">Modelo Experimentador</label><select id="pModExp"><option value="gpt-4o-mini" selected>gpt-4o-mini</option><option value="gpt-4o">gpt-4o</option></select><p class="hint">Distinto del evaluador: rompe el sesgo de auto-preferencia.</p></div>
+      <div><label for="pFormato">Formato de descarga</label><select id="pFormato"><option value="md">Markdown (.md)</option><option value="txt">Texto plano (.txt)</option><option value="doc">Word (.doc)</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">🕸 Exploración del grafo (AgentHub: "traversar el grafo de búsqueda")</h3>
+    <p class="hint">Cada experimento es un nodo del DAG. En lugar de una cadena voraz, el loop puede ramificar desde distintos estados retenidos y mantener vivas varias líneas — los experimentos fallidos siguen siendo evidencia.</p>
+    <div class="grid2">
+      <div><label for="pStrategy">Estrategia de ramificación</label>
+        <select id="pStrategy">
+          <option value="greedy">⛰️ Voraz — siempre desde el mejor nodo (hill climbing)</option>
+          <option value="frontier" selected>🧭 Frontera — explora las hojas menos desarrolladas</option>
+          <option value="beam">🔦 Haz (beam) — rota entre los mejores N linajes</option>
+        </select>
+        <p class="hint">La frontera y el haz escapan mejor de óptimos locales; la voraz converge más rápido.</p></div>
+      <div id="pBeamWrap" style="display:none"><label for="pBeam">Anchura del haz (N linajes)</label><input type="number" id="pBeam" min="2" max="6" value="3"></div>
+    </div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="kgOn"> 🧠 Extraer grafo de conocimiento (world model) del documento y usarlo como grounding</label>
+    <p class="hint">Una llamada al inicio extrae entidades y afirmaciones con su nivel de apoyo. Se muestra en la pestaña Grafo y se inyecta al Experimentador para que priorice reforzar las afirmaciones sin evidencia. "El agente olvida; el grafo no."</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">⛔ Restricciones — verificadas con código, no con promesas</h3>
+    <p class="hint">Cadenas, cifras, nombres o citas que el agente <b>nunca</b> puede alterar. Una por línea. Tras cada parche, JS comprueba que siguen presentes con el mismo número de ocurrencias; si no, revert automático sin gastar evaluación.</p>
+    <textarea id="restricciones" placeholder="Ej.:&#10;3.847 muestras&#10;Universidad Miguel Hernández&#10;p &lt; 0.05"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn mini" id="btnAutoRestr">🔍 Detectar automáticamente</button><span class="hint" id="restrinfo"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">🔍 Búsqueda web para enriquecer hipótesis</h3>
+    <label class="chk"><input type="checkbox" id="wsOn"> Activar búsqueda web en el loop</label>
+    <p class="hint">💡 El Experimentador recibe evidencia real (papers, normativa, ejemplos) antes de cada hipótesis. Las fuentes quedan registradas.</p>
+    <div id="wsopts" style="display:none;margin-top:10px">
+      <div class="grid3">
+        <div><label for="wsFuentes">Fuentes</label>
+          <select id="wsFuentes">
+            <option value="acad" selected>📚 Académico (gratis — CrossRef + PubMed + OpenAlex + Wikipedia)</option>
+            <option value="tavily">🌐 Web general (Tavily — requiere key)</option>
+            <option value="ambas">🔀 Ambas</option>
+          </select></div>
+        <div><label for="wsDepth">Profundidad de búsqueda</label>
+          <select id="wsDepth">
+            <option value="basica">⚡ Básica — 1 consulta · 2 fuentes</option>
+            <option value="estandar" selected>⚖️ Estándar — 1 consulta · 3 fuentes</option>
+            <option value="profunda">🔬 Profunda — 2 consultas · 5 fuentes · Tavily advanced + resumen</option>
+          </select>
+          <p class="hint">La profunda lanza una 2ª consulta sobre el tema global del documento y usa el modo <code>advanced</code> de Tavily con respuesta sintetizada.</p></div>
+        <div><label for="tavilykey">Tavily API Key</label>
+          <div class="row"><input type="password" id="tavilykey" placeholder="tvly-..." style="flex:1"><button class="btn mini" id="btnTavilyTest">Probar</button></div>
+          <label class="chk" style="margin-top:4px"><input type="checkbox" id="tavilyPersist"> Guardar en localStorage</label>
+        </div>
+      </div>
+      <p class="hint" id="wsstatus">Última búsqueda: —</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">💰 Estimación de coste</h3>
+    <div class="statbar">
+      <div><b id="estMin">$—</b><span>coste mínimo est.</span></div>
+      <div><b id="estMax">$—</b><span>coste máximo est.</span></div>
+      <div><b id="estCalls">—</b><span>llamadas / iteración</span></div>
+    </div>
+    <p class="hint">La v3 hace más llamadas por iteración (mediana×evaluaciones + K hipótesis + 3 juicios), pero el formato parche reduce ~70% los tokens de salida. El coste real depende del documento.</p>
+  </div>
+
+  <div class="stepnav"><span></span><button class="btn primary" data-goto="rubrica">Siguiente: Rúbrica →</button></div>
+</section>
+
+<!-- ══════════ RÚBRICA ══════════ -->
+<section class="panel" id="p-rubrica">
+  <h2>Rúbrica</h2>
+  <p class="sub">Define la métrica. Los criterios 👁 ocultos los usa el Evaluador pero el Experimentador nunca los ve: son tu defensa anti-Goodhart. Paso 2 de 3.</p>
+
+  <div class="row" style="justify-content:space-between">
+    <b style="font-family:var(--disp)">⚡ Plantillas predefinidas</b>
+    <button class="btn mini" id="btnSugerirIA">✨ Sugerir con IA desde el documento a mejorar</button>
+  </div>
+  <div class="tpls" id="tpls"></div>
+
+  <div class="card">
+    <h3 style="margin-top:0">📎 Generar rúbrica desde un documento de referencia</h3>
+    <p class="hint">Sube la convocatoria, la guía de evaluación del tribunal, una plantilla de criterios o cualquier documento que defina qué es "bueno". La IA extraerá de ahí los criterios y pesos. Es distinto del documento a mejorar.</p>
+    <div class="drop" id="dropRef" tabindex="0" role="button" aria-label="Subir documento de referencia" style="padding:20px">
+      <b>Arrastra aquí el documento de referencia</b>
+      <div class="hint">O haz clic · .txt · .md · .docx · .pdf</div>
+      <input type="file" id="fileRef" accept=".txt,.md,.docx,.pdf" class="sr">
+    </div>
+    <div id="refinfo" class="hint"></div>
+  </div>
+
+  <div class="row" style="justify-content:space-between;margin-bottom:6px">
+    <h3 style="margin:0">📐 Criterios de evaluación</h3>
+    <div class="row">
+      <span class="wsum" id="wsum">0% / 100%</span>
+      <button class="btn mini" id="btnEquil">⚖️ Equilibrar pesos</button>
+      <button class="btn mini" id="btnAddCrit">+ Añadir criterio</button>
+    </div>
+  </div>
+  <div id="critlist"></div>
+  <p class="hint" style="margin-top:8px">💡 Cada criterio debe ser <b>independiente</b> y <b>evaluable objetivamente</b>. Usa 3–6 visibles. Si mejorar C1 mejora automáticamente C2, son el mismo criterio. Los pesos de los criterios <b>visibles</b> suman 100% y forman el score objetivo; los ocultos se puntúan aparte y protegen vía puerta Pareto y alerta de gaming.</p>
+
+  <div class="stepnav"><button class="btn" data-goto="config">← Configuración</button><button class="btn primary" data-goto="ejecutar">Siguiente: Ejecutar →</button></div>
+</section>
+
+<!-- ══════════ EJECUTAR ══════════ -->
+<section class="panel" id="p-ejecutar">
+  <h2>Ejecutar loop</h2>
+  <p class="sub">El humano sale del bucle aquí. Paso 3 de 3.</p>
+  <div class="card"><h3 style="margin-top:0">📋 Resumen de configuración</h3><div id="resumen" class="mono" style="font-size:.78rem;line-height:1.8"></div></div>
+  <div id="validacion"></div>
+  <div class="row">
+    <button class="btn primary" id="btnStart">▶ Iniciar mejora automática</button>
+    <button class="btn danger" id="btnStop" disabled>⏹ Detener</button>
+  </div>
+  <div class="statbar">
+    <div><b id="stIter">—</b><span>iteración</span></div>
+    <div><b id="stScore">—</b><span>mejor score</span></div>
+    <div><b id="stKeeps">—</b><span>conservados</span></div>
+    <div><b id="stNodes">—</b><span>nodos del grafo</span></div>
+    <div><b id="stEff">—</b><span>Δscore / $</span></div>
+  </div>
+  <details open><summary style="cursor:pointer;font-size:.8rem">▼ Log en vivo</summary><div id="livelog" role="log" aria-live="polite">Esperando ejecución…</div></details>
+</section>
+
+<!-- ══════════ GRAFO ══════════ -->
+<section class="panel" id="p-grafo">
+  <h2>Grafo de experimentos</h2>
+  <p class="sub">El DAG es el grafo (AgentHub). Los commits son nodos; los enlaces padre→hijo, aristas. El linaje ganador va resaltado en verde; los nodos rojos son experimentos revertidos que se conservan como evidencia. Haz clic en un nodo para ver su hipótesis y su diff.</p>
+  <div class="tablewrap" style="padding:8px"><canvas id="chGraph" width="1080" height="240" style="width:100%"></canvas></div>
+  <div id="nodedetail"></div>
+  <h3>Operaciones sobre el grafo</h3>
+  <div id="graphops"><p class="hint">Sin grafo todavía.</p></div>
+  <h3>🧠 Grafo de conocimiento (world model)</h3>
+  <div id="kgout"><p class="hint">🕸 Actívalo en Configuración para extraer entidades y afirmaciones del documento.</p></div>
+</section>
+
+<!-- ══════════ RESULTADOS ══════════ -->
+<section class="panel" id="p-resultados">
+  <h2>Resultados</h2>
+  <p class="sub">El registro completo de experimentos: hipótesis, puertas y decisiones.</p>
+  <div id="gamingalert"></div>
+  <div class="grid2">
+    <div><h3>Evolución del score (visible vs oculto)</h3><canvas class="chart" id="chScore" width="560" height="260"></canvas></div>
+    <div><h3>Eficiencia Δscore acumulado / $</h3><canvas class="chart" id="chEff" width="560" height="260"></canvas></div>
+  </div>
+  <h3>Scores por criterio: inicial vs final</h3>
+  <div id="critcompare"></div>
+  <h3>🧪 Tabla de experimentos</h3>
+  <div class="tablewrap"><table class="exp" id="exptable">
+    <thead><tr><th>#</th><th>Tipo</th><th>Hipótesis</th><th>Diff</th><th>Score antes→después</th><th>Rango juez</th><th>Puertas</th><th>Resultado</th><th>Fuentes</th></tr></thead>
+    <tbody id="expbody"><tr><td colspan="9" style="text-align:center;color:var(--ink-soft)">📊 Los resultados aparecerán aquí tras ejecutar el loop.</td></tr></tbody>
+  </table></div>
+</section>
+
+<!-- ══════════ DOCUMENTO ══════════ -->
+<section class="panel" id="p-documento">
+  <h2>Documento final</h2>
+  <p class="sub">Documento mejorado y diff acumulado respecto al original.</p>
+  <div class="row">
+    <button class="btn primary" id="btnDownload" disabled>⬇ Descargar documento</button>
+    <span class="hint" id="docstats"></span>
+  </div>
+  <h3>Cambios conservados (diff auditable)</h3>
+  <div id="finaldiff"><p class="hint">📄 Aparecerá aquí una vez completado el loop.</p></div>
+  <h3>Texto final</h3>
+  <div class="preview" id="finaltext" style="max-height:420px;display:none"></div>
+</section>
+
+<!-- ══════════ AGENTES ══════════ -->
+<section class="panel" id="p-agentes">
+  <h2>Agentes &amp; Prompts</h2>
+  <p class="sub">🤖 Estos son los prompts exactos que reciben los agentes. Edítalos antes de la ejecución; los cambios se aplican en el siguiente loop. Usa <code>{VARIABLE}</code> para las variables dinámicas.</p>
+  <div id="agentboxes"></div>
+  <div class="row"><button class="btn primary" id="btnSavePrompts">💾 Guardar cambios</button><button class="btn" id="btnResetAll">↺ Restaurar todo</button><button class="btn" data-goto="ejecutar">▶ Ir a ejecutar →</button></div>
+</section>
+
+<!-- ══════════ BÚSQUEDAS ══════════ -->
+<section class="panel" id="p-busquedas">
+  <h2>Búsquedas</h2>
+  <p class="sub">Evidencia externa usada por el Experimentador durante el loop.</p>
+  <div id="searchlist"><p class="hint">🔍 Las búsquedas realizadas durante el loop aparecerán aquí.</p></div>
+</section>
+
+<!-- ══════════ META ══════════ -->
+<section class="panel" id="p-meta">
+  <h2>Meta-mejora del proceso</h2>
+  <p class="sub">El equivalente a editar <code>program.md</code>: el Meta-analista lee la tabla de experimentos y propone cambios al Skill AutoImprove. Tú apruebas o rechazas cada uno. El humano sale del loop del documento, pero se queda en el loop del proceso.</p>
+  <button class="btn primary" id="btnMeta" disabled>🧠 Analizar ejecución</button>
+  <div id="metaout" style="margin-top:16px"></div>
+</section>
+</main>
+
+<script>
+'use strict';
+/* ══════════════ AutoResearch v3 — motor ══════════════ */
+const $ = id => document.getElementById(id);
+const PRICES = { 'gpt-4o-mini': { in: 0.15, out: 0.60 }, 'gpt-4o': { in: 2.50, out: 10.00 } }; // $/M tokens
+const LS = { key: 'ia_openai_key', tavily: 'ia_tavily_key', session: 'autoresearch_v3_session', prompts: 'autoresearch_v3_prompts' };
+
+const S = {
+  doc: null,            // {name, text}
+  rubric: [],           // {id,nombre,desc,peso,oculto}
+  experiments: [],      // filas de la tabla
+  searches: [],
+  history: [],          // hipótesis pasadas (para {HISTORIAL})
+  scoreSeries: [],      // {iter, visible, oculto, usd}
+  nodes: [],            // DAG de commits: {id,parent,hip,tipo,patches,ev,status,iter,sources,doc}
+  kg: null,             // grafo de conocimiento (world model del baseline)
+  bestNodeId: null,
+  graphPos: {},         // posiciones de nodos para hit-testing
+  cost: { calls: 0, tin: 0, tout: 0, usd: 0 },
+  running: false,
+  abort: null,
+  finalDoc: null,
+  baselineEval: null,
+  lastEval: null,
+  tplSel: null
+};
+
+/* ── Plantillas de rúbrica (criterio oculto anti-gaming incluido) ── */
+const HIDDEN_ANTIGAMING = { nombre: 'Concisión y ausencia de relleno', desc: 'Penaliza verborrea, secciones formulaicas, jerga hueca y longitud injustificada. Un documento más largo no es mejor.', peso: 0, oculto: true };
+const TEMPLATES = {
+  academica: { em: '🎓', nombre: 'Memoria académica', crit: [
+    ['Rigor metodológico', 'Métodos descritos con precisión, decisiones justificadas, limitaciones reconocidas', 30],
+    ['Estructura y coherencia', 'Secciones completas, hilo argumental claro, transiciones lógicas', 25],
+    ['Fundamentación', 'Afirmaciones respaldadas por evidencia o referencias pertinentes', 25],
+    ['Claridad expositiva', 'Redacción precisa, sin ambigüedades, apta para el tribunal', 20]]},
+  grant: { em: '🔬', nombre: 'Propuesta / Grant', crit: [
+    ['Impacto y novedad', 'Contribución diferencial clara frente al estado del arte', 30],
+    ['Viabilidad', 'Plan de trabajo realista, hitos medibles, riesgos identificados', 25],
+    ['Adecuación a la convocatoria', 'Responde explícitamente a los criterios del evaluador externo', 25],
+    ['Presupuesto y recursos', 'Justificación económica coherente con las actividades', 20]]},
+  informe: { em: '📊', nombre: 'Informe técnico', crit: [
+    ['Exactitud técnica', 'Datos correctos, unidades consistentes, cálculos verificables', 35],
+    ['Accionabilidad', 'Conclusiones y recomendaciones concretas y priorizadas', 25],
+    ['Estructura ejecutiva', 'Resumen inicial útil, jerarquía de información clara', 20],
+    ['Trazabilidad', 'Cada afirmación remite a su fuente o evidencia', 20]]},
+  contrato: { em: '⚖️', nombre: 'Contrato / Convenio', crit: [
+    ['Precisión jurídica', 'Términos definidos, sin ambigüedades interpretables', 35],
+    ['Completitud', 'Cubre obligaciones, plazos, incumplimiento y resolución', 30],
+    ['Equilibrio entre partes', 'Derechos y obligaciones proporcionados', 20],
+    ['Legibilidad', 'Comprensible sin sacrificar rigor', 15]]},
+  articulo: { em: '📝', nombre: 'Artículo investigación', crit: [
+    ['Solidez científica', 'Diseño, análisis e interpretación correctos y reproducibles', 30],
+    ['Contribución', 'Aporte claro y bien posicionado frente a la literatura', 25],
+    ['Calidad de resultados', 'Presentación de datos completa, estadística adecuada', 25],
+    ['Redacción académica', 'Estilo, estructura IMRyD y citación correctos', 20]]},
+  negocio: { em: '💼', nombre: 'Plan de negocio', crit: [
+    ['Propuesta de valor', 'Problema, solución y diferenciación bien articulados', 30],
+    ['Solidez financiera', 'Proyecciones justificadas, supuestos explícitos', 25],
+    ['Análisis de mercado', 'Tamaño, competencia y segmentos con datos', 25],
+    ['Plan de ejecución', 'Hitos, equipo y riesgos concretos', 20]]},
+  software: { em: '💻', nombre: 'Documentación SW', crit: [
+    ['Exactitud técnica', 'Coincide con el comportamiento real del sistema', 30],
+    ['Completitud', 'Cubre instalación, uso, API y errores comunes', 25],
+    ['Ejemplos ejecutables', 'Fragmentos de código correctos y copiables', 25],
+    ['Navegabilidad', 'Estructura que permite encontrar respuestas rápido', 20]]},
+  custom: { em: '✏️', nombre: 'Personalizada', crit: [] }
+};
+
+/* ── Prompts por defecto ── */
+const DEFAULT_PROMPTS = {
+  skill: `METODOLOGÍA AUTOIMPROVE (contexto compartido)
+1. Trabajas sobre un baseline medido. Cada experimento es UNA hipótesis con UN cambio atómico en formato parche.
+2. Formato parche: devuelve fragmentos "buscar" copiados LITERALMENTE del documento (deben aparecer exactamente una vez) y su "reemplazar". Nunca reescribas el documento entero.
+3. El cambio se mide con la rúbrica y pasa tres puertas (margen mínimo, Pareto por criterio, juicio ciego por pares). Si falla cualquiera, se revierte.
+4. NUNCA repitas hipótesis del historial: cada una incluye la puerta que la rechazó; aprende de ello.
+5. Las restricciones se verifican con código tras cada parche: no negocies con ellas, no las parafrasees, no las muevas.
+6. Si recibes CONTEXTO_WEB, ancla la mejora en esa evidencia y cita las FUENTES en el texto cuando proceda.
+7. Mejorar = más preciso, mejor fundamentado, mejor estructurado. NO = más largo, más adjetivos, más jerga.`,
+
+  evalSys: `Eres un evaluador académico riguroso e insobornable. Puntúas documentos según una rúbrica, criterio a criterio, de 1.0 a 10.0. Eres inmune a la verborrea: la longitud y la jerga no puntúan; la sustancia sí. Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional ni markdown.`,
+  evalUser: `Evalúa el documento según esta rúbrica. Puntúa cada criterio de 1.0 a 10.0 con un decimal.
+
+RÚBRICA:
+{CRITERIOS}
+
+DOCUMENTO:
+{DOCUMENTO}
+
+Responde solo con JSON: {"scores":{"C1":X,"C2":X,...},"criterio_mas_bajo":"CX","razon_mas_bajo":"una frase concreta y accionable"}`,
+
+  expSys: `Eres un experimentador de mejora de documentos. Propones UN cambio atómico por hipótesis, en formato parche, dirigido al criterio más débil. Respondes EXCLUSIVAMENTE con JSON válido.`,
+  expUser: `{SKILL}
+
+TIPO DE MOVIMIENTO: {TIPO_MOVIMIENTO}
+(local = máx. 3 parches pequeños y quirúrgicos · estructural = 1 parche grande que reorganiza, fusiona o mueve secciones)
+
+CRITERIO MÁS DÉBIL: {CRITERIO_BAJO} — {RAZON}
+
+RÚBRICA VISIBLE:
+{CRITERIOS_VISIBLES}
+
+HISTORIAL DE HIPÓTESIS YA PROBADAS (no las repitas ni las reformules):
+{HISTORIAL}
+
+RESTRICCIONES (texto intocable, verificado con código):
+{RESTRICCIONES}
+
+GRAFO DE CONOCIMIENTO DEL DOCUMENTO (world model; prioriza reforzar las afirmaciones sin apoyo):
+{GROUNDING}
+
+{CONTEXTO_WEB}
+
+FUENTES CITABLES:
+{FUENTES}
+
+DOCUMENTO ACTUAL:
+{DOCUMENTO}
+
+Formula UNA hipótesis nueva de mejora del criterio débil y devuélvela como parches. Cada "buscar" debe ser una copia LITERAL y única de un fragmento del documento (incluye contexto suficiente para que sea único).
+Responde solo con JSON: {"hipotesis":"...","tipo":"local|estructural","parches":[{"buscar":"...","reemplazar":"..."}]}`,
+
+  juezSys: `Eres un juez comparativo ciego. Recibes dos versiones de un documento sin saber cuál es la original y cuál la modificada. Decides cuál cumple mejor la rúbrica, con especial atención a la sustancia frente al relleno. Respondes EXCLUSIVAMENTE con JSON válido.`,
+  juezUser: `RÚBRICA:
+{CRITERIOS}
+
+DOCUMENTO 1:
+{DOC_1}
+
+DOCUMENTO 2:
+{DOC_2}
+
+¿Qué documento cumple mejor la rúbrica en conjunto?
+Responde solo con JSON: {"mejor":"1|2","confianza":"alta|media|baja","razon":"una frase"}`,
+
+  metaSys: `Eres un meta-analista de procesos de mejora iterativa. Analizas registros de experimentos para mejorar las instrucciones (skill) que guían al agente experimentador. Respondes EXCLUSIVAMENTE con JSON válido.`,
+  metaUser: `Analiza esta tabla de experimentos de una ejecución completa del loop de mejora y el skill actual. Identifica qué tipos de hipótesis se conservaron, cuáles fracasaron repetidamente y en qué puerta, y propone ediciones concretas al skill para que la PRÓXIMA ejecución sea más eficaz.
+
+TABLA DE EXPERIMENTOS:
+{TABLA_EXPERIMENTOS}
+
+SKILL ACTUAL:
+{SKILL}
+
+Responde solo con JSON: {"diagnostico":"qué patrones funcionaron y cuáles fracasaron","propuestas":[{"seccion_skill":"fragmento literal del skill a modificar o 'AÑADIR'","cambio":"texto nuevo propuesto"}]}`
+};
+let PROMPTS = Object.assign({}, DEFAULT_PROMPTS);
+
+const AGENT_META = [
+  { key: 'eval', nombre: 'Agente 1 — Evaluador', desc: 'Puntúa cada criterio (mediana de N llamadas, temperature 0)', vars: '{CRITERIOS} · {DOCUMENTO}', sys: 'evalSys', usr: 'evalUser', json: '{"scores":{"C1":X,...},"criterio_mas_bajo":"CX","razon_mas_bajo":"una frase"}' },
+  { key: 'exp', nombre: 'Agente 2 — Experimentador', desc: 'Formula hipótesis y devuelve parches (nunca ve los criterios ocultos)', vars: '{SKILL} · {TIPO_MOVIMIENTO} · {CRITERIO_BAJO} · {RAZON} · {CRITERIOS_VISIBLES} · {HISTORIAL} · {RESTRICCIONES} · {GROUNDING} · {DOCUMENTO} · {CONTEXTO_WEB} · {FUENTES}', sys: 'expSys', usr: 'expUser', json: '{"hipotesis":"...","tipo":"local|estructural","parches":[{"buscar":"...","reemplazar":"..."}]}' },
+  { key: 'juez', nombre: 'Agente 3 — Juez comparativo', desc: 'Decide entre dos versiones a ciegas, orden aleatorizado, 3 votaciones', vars: '{CRITERIOS} · {DOC_1} · {DOC_2}', sys: 'juezSys', usr: 'juezUser', json: '{"mejor":"1|2","confianza":"alta|media|baja","razon":"..."}' },
+  { key: 'meta', nombre: 'Agente 4 — Meta-analista', desc: 'Offline: analiza la ejecución y propone mejoras al skill', vars: '{TABLA_EXPERIMENTOS} · {SKILL}', sys: 'metaSys', usr: 'metaUser', json: '{"diagnostico":"...","propuestas":[{"seccion_skill":"...","cambio":"..."}]}' }
+];
+/* ══════════════ Utilidades API ══════════════ */
+function cleanJSON(t) {
+  let s = String(t).trim().replace(/```json/gi, '```').replace(/```/g, '').trim();
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) s = s.slice(a, b + 1);
+  return JSON.parse(s);
+}
+async function callAI(model, system, user, opts = {}) {
+  const key = $('apikey').value.trim();
+  if (!key) throw new Error('Falta la API key de OpenAI');
+  const body = {
+    model, max_tokens: opts.maxTokens || 4000,
+    temperature: opts.temperature ?? 0,
+    response_format: { type: 'json_object' },
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+  };
+  const doFetch = async () => {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', signal: S.abort ? S.abort.signal : undefined,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) { const e = await r.text(); throw new Error('API ' + r.status + ': ' + e.slice(0, 200)); }
+    return r.json();
+  };
+  let data = await doFetch();
+  if (data.usage) {
+    S.cost.calls++; S.cost.tin += data.usage.prompt_tokens || 0; S.cost.tout += data.usage.completion_tokens || 0;
+    const p = PRICES[model] || PRICES['gpt-4o-mini'];
+    S.cost.usd += ((data.usage.prompt_tokens || 0) * p.in + (data.usage.completion_tokens || 0) * p.out) / 1e6;
+    renderCost();
+  }
+  const raw = (data.choices && data.choices[0] && data.choices[0].message.content) || '';
+  try { return cleanJSON(raw); }
+  catch (e) {
+    log('⚠ JSON inválido, reintento único…', 'wr');
+    data = await doFetch();
+    if (data.usage) { S.cost.calls++; S.cost.tin += data.usage.prompt_tokens || 0; S.cost.tout += data.usage.completion_tokens || 0; renderCost(); }
+    return cleanJSON(data.choices[0].message.content);
+  }
+}
+const fill = (tpl, map) => String(tpl).replace(/\{([A-Z_0-9]+)\}/g, (m, k) => (k in map ? map[k] : m));
+const median = a => { const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const fmtCrit = list => list.map((c, i) => `C${i + 1} — ${c.nombre} (peso ${c.peso}%${c.oculto ? ', criterio de control' : ''}): ${c.desc}`).join('\n');
+
+/* ══════════════ Evaluación robusta (mediana de N, temp 0) ══════════════ */
+async function evaluar(docText) {
+  const n = parseInt($('pMed').value, 10);
+  const critTxt = fmtCrit(S.rubric);
+  const runs = [];
+  for (let i = 0; i < n; i++) {
+    runs.push(await callAI($('pModEval').value, PROMPTS.evalSys,
+      fill(PROMPTS.evalUser, { CRITERIOS: critTxt, DOCUMENTO: docText }), { temperature: 0 }));
+  }
+  const scores = {}, totals = [];
+  S.rubric.forEach((c, i) => {
+    const id = 'C' + (i + 1);
+    scores[id] = median(runs.map(r => Number((r.scores || {})[id]) || 1));
+  });
+  runs.forEach(r => {
+    let t = 0, w = 0;
+    S.rubric.forEach((c, i) => { if (!c.oculto) { t += (Number((r.scores || {})[('C' + (i + 1))]) || 1) * c.peso; w += c.peso; } });
+    totals.push(w ? t / w : 0);
+  });
+  let visT = 0, visW = 0, hidS = [], low = null, lowV = 99;
+  S.rubric.forEach((c, i) => {
+    const id = 'C' + (i + 1), v = scores[id];
+    if (c.oculto) hidS.push(v); else { visT += v * c.peso; visW += c.peso; if (v < lowV) { lowV = v; low = { id, nombre: c.nombre }; } }
+  });
+  const lastRun = runs[runs.length - 1];
+  return {
+    scores, total: visW ? +(visT / visW).toFixed(2) : 0,
+    hidden: hidS.length ? +(hidS.reduce((a, b) => a + b, 0) / hidS.length).toFixed(2) : null,
+    rango: +(Math.max(...totals) - Math.min(...totals)).toFixed(2),
+    criterioBajo: low ? low.id : 'C1',
+    criterioBajoNombre: low ? low.nombre : '',
+    razon: (lastRun && lastRun.razon_mas_bajo) || ''
+  };
+}
+
+/* ══════════════ Parches + verificador determinista ══════════════ */
+function countOcc(hay, needle) {
+  if (!needle) return 0; let c = 0, i = 0;
+  while ((i = hay.indexOf(needle, i)) !== -1) { c++; i += needle.length; }
+  return c;
+}
+function aplicarParches(doc, parches, tipo) {
+  if (!Array.isArray(parches) || !parches.length) return { ok: false, err: 'sin parches' };
+  const max = tipo === 'estructural' ? 1 : 3;
+  if (parches.length > max) parches = parches.slice(0, max);
+  let out = doc;
+  for (const p of parches) {
+    if (!p || typeof p.buscar !== 'string' || typeof p.reemplazar !== 'string') return { ok: false, err: 'parche malformado' };
+    if (countOcc(out, p.buscar) !== 1) return { ok: false, err: 'el fragmento "buscar" no aparece exactamente una vez' };
+    out = out.replace(p.buscar, p.reemplazar);
+  }
+  return { ok: true, text: out, parches };
+}
+function getRestricciones() { return $('restricciones').value.split('\n').map(s => s.trim()).filter(Boolean); }
+function verificarRestricciones(candidate, refCounts) {
+  for (const [str, n] of refCounts) if (countOcc(candidate, str) !== n) return { ok: false, violada: str };
+  return { ok: true };
+}
+
+/* ══════════════ Juez por pares a ciegas (3 votos, orden aleatorio) ══════════════ */
+async function juezPares(oldDoc, newDoc) {
+  const critTxt = fmtCrit(S.rubric);
+  let wins = 0; const votos = [];
+  for (let i = 0; i < 3; i++) {
+    const newFirst = Math.random() < 0.5;
+    const r = await callAI($('pModEval').value, PROMPTS.juezSys,
+      fill(PROMPTS.juezUser, { CRITERIOS: critTxt, DOC_1: newFirst ? newDoc : oldDoc, DOC_2: newFirst ? oldDoc : newDoc }), { temperature: 0 });
+    const ganaNuevo = (String(r.mejor) === '1') === newFirst;
+    if (ganaNuevo) wins++;
+    votos.push({ ganaNuevo, confianza: r.confianza, razon: r.razon });
+  }
+  return { wins, votos, ok: wins >= 2 };
+}
+
+/* ══════════════ Búsqueda web con profundidad ══════════════ */
+const WS_DEPTH = {
+  basica:   { n: 2, queries: 1, tavilyDepth: 'basic',    answer: false },
+  estandar: { n: 3, queries: 1, tavilyDepth: 'basic',    answer: false },
+  profunda: { n: 5, queries: 2, tavilyDepth: 'advanced', answer: true }
+};
+async function jget(url) { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function buscarUna(query, cfg) {
+  const modo = $('wsFuentes').value, n = cfg.n;
+  const fuentes = []; let answer = null;
+  const tryPush = (arr) => arr.forEach(f => { if (f.titulo && fuentes.length < n * 2) fuentes.push(f); });
+  if (modo === 'acad' || modo === 'ambas') {
+    try { const d = await jget('https://api.crossref.org/works?rows=' + n + '&query=' + encodeURIComponent(query));
+      tryPush((d.message.items || []).map(it => ({ titulo: (it.title || [])[0], url: it.URL, snippet: 'CrossRef · ' + ((it['container-title'] || [])[0] || '') + ' ' + ((it.issued && it.issued['date-parts'] && it.issued['date-parts'][0][0]) || ''), src: 'CrossRef' }))); } catch (e) {}
+    try { const d = await jget('https://api.openalex.org/works?per-page=' + n + '&search=' + encodeURIComponent(query));
+      tryPush((d.results || []).map(it => ({ titulo: it.title, url: it.id, snippet: 'OpenAlex · citas: ' + it.cited_by_count, src: 'OpenAlex' }))); } catch (e) {}
+    try { const d = await jget('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=' + n + '&term=' + encodeURIComponent(query));
+      const ids = (d.esearchresult.idlist || []);
+      if (ids.length) { const s = await jget('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(','));
+        tryPush(ids.map(id => { const it = s.result[id] || {}; return { titulo: it.title, url: 'https://pubmed.ncbi.nlm.nih.gov/' + id + '/', snippet: 'PubMed · ' + (it.source || '') + ' ' + (it.pubdate || ''), src: 'PubMed' }; })); } } catch (e) {}
+    try { const d = await jget('https://es.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=' + n + '&srsearch=' + encodeURIComponent(query));
+      tryPush((d.query.search || []).map(it => ({ titulo: it.title, url: 'https://es.wikipedia.org/wiki/' + encodeURIComponent(it.title), snippet: 'Wikipedia · ' + String(it.snippet || '').replace(/<[^>]+>/g, '').slice(0, 140), src: 'Wikipedia' }))); } catch (e) {}
+  }
+  if (modo === 'tavily' || modo === 'ambas') {
+    try { const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: $('tavilykey').value.trim(), query, max_results: n,
+          search_depth: cfg.tavilyDepth, include_answer: cfg.answer }) });
+      if (r.ok) { const d = await r.json();
+        if (cfg.answer && d.answer) answer = d.answer;
+        tryPush((d.results || []).map(it => ({ titulo: it.title, url: it.url, snippet: 'Tavily(' + cfg.tavilyDepth + ') · ' + String(it.content || '').slice(0, 160), src: 'Tavily' }))); } } catch (e) {}
+  }
+  return { fuentes: fuentes.slice(0, n), answer };
+}
+function temaDoc() {
+  const t = (S.doc ? S.doc.text : '').split('\n').map(s => s.replace(/^#+\s*/, '').trim()).find(s => s.length > 10) || '';
+  return t.slice(0, 100);
+}
+async function buscarWeb(queryBase, iter) {
+  const cfg = WS_DEPTH[$('wsDepth').value] || WS_DEPTH.estandar;
+  const queries = [queryBase];
+  if (cfg.queries > 1) { const tema = temaDoc(); if (tema && tema !== queryBase) queries.push(tema); }
+  const fuentes = []; const answers = [];
+  for (const q of queries) {
+    const r = await buscarUna(q, cfg);
+    r.fuentes.forEach(f => { if (!fuentes.some(x => x.url === f.url)) fuentes.push(f); });
+    if (r.answer) answers.push(r.answer);
+    S.searches.push({ iter, query: q + ' [' + $('wsDepth').value + ']', fuentes: r.fuentes });
+  }
+  $('wsstatus').textContent = 'Última búsqueda (' + $('wsDepth').value + '): ' + queries.length + ' consulta(s) → ' + fuentes.length + ' fuentes únicas';
+  renderSearches();
+  return { fuentes, resumen: answers.join('\n') };
+}
+
+/* ══════════════ Loop principal ══════════════ */
+function log(msg, cls) {
+  const el = $('livelog');
+  const line = document.createElement('div'); if (cls) line.className = cls;
+  line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  el.appendChild(line); el.scrollTop = el.scrollHeight;
+}
+function pushExp(row) { S.experiments.push(row); renderExpTable(); saveSession(); }
+function histTxt() { return S.history.length ? S.history.map((h, i) => (i + 1) + '. [' + h.res + '] ' + h.hip).join('\n') : '(vacío)'; }
+
+async function experimentar(docText, ev, tipo, webCtx, fuentesTxt, grounding) {
+  return callAI($('pModExp').value, PROMPTS.expSys, fill(PROMPTS.expUser, {
+    SKILL: PROMPTS.skill, TIPO_MOVIMIENTO: tipo,
+    CRITERIO_BAJO: ev.criterioBajo + ' (' + ev.criterioBajoNombre + ')', RAZON: ev.razon,
+    CRITERIOS_VISIBLES: fmtCrit(S.rubric.filter(c => !c.oculto)),
+    HISTORIAL: histTxt(), RESTRICCIONES: getRestricciones().join('\n') || '(ninguna)',
+    GROUNDING: grounding || '(desactivado)',
+    CONTEXTO_WEB: webCtx, FUENTES: fuentesTxt, DOCUMENTO: docText
+  }), { temperature: 0.9, maxTokens: 4000 });
+}
+async function puertas(oldDoc, oldEv, cand) {
+  const margen = parseFloat($('pMargen').value), eps = parseFloat($('pEpsilon').value);
+  const delta = +(cand.ev.total - oldEv.total).toFixed(2);
+  const g1 = delta >= margen;
+  let g2 = true, g2crit = null;
+  S.rubric.forEach((c, i) => { const id = 'C' + (i + 1);
+    if (cand.ev.scores[id] < oldEv.scores[id] - eps) { g2 = false; if (!g2crit) g2crit = id; } });
+  let g3 = null, juicio = null;
+  if (g1 && g2) { juicio = await juezPares(oldDoc, cand.text); g3 = juicio.ok; }
+  return { ok: !!(g1 && g2 && g3), g1, g2, g2crit, g3, delta, juicio };
+}
+
+/* ══════════════ Commit DAG — "el DAG es el grafo" (AgentHub) ══════════════ */
+let NODE_SEQ = 0;
+function newNode(o) { o.id = 'n' + (NODE_SEQ++); S.nodes.push(o); return o; }
+const nodeById = id => S.nodes.find(n => n.id === id);
+const childrenOf = id => S.nodes.filter(n => n.parent === id);
+const retained = () => S.nodes.filter(n => n.status === 'kept' || n.status === 'root');
+const keptChildrenOf = id => S.nodes.filter(n => n.parent === id && (n.status === 'kept' || n.status === 'root'));
+const leaves = () => retained().filter(n => keptChildrenOf(n.id).length === 0);
+function lineage(node) { const path = []; let x = node; while (x) { path.unshift(x); x = (x.parent != null) ? nodeById(x.parent) : null; } return path; }
+function bestNode() { return retained().reduce((b, n) => (!b || n.ev.total > b.ev.total) ? n : b, null); }
+function pickBase(strategy, beamW, iter) {
+  const R = retained(); if (!R.length) return null;
+  if (strategy === 'greedy') return bestNode();
+  if (strategy === 'frontier') {
+    const L = leaves().length ? leaves() : R;
+    return L.slice().sort((a, b) => (childrenOf(a.id).length - childrenOf(b.id).length) || (b.ev.total - a.ev.total))[0];
+  }
+  const top = R.slice().sort((a, b) => b.ev.total - a.ev.total).slice(0, Math.max(1, beamW));
+  return top[iter % top.length];
+}
+
+/* ══════════════ Grafo de conocimiento (world model del baseline) ══════════════ */
+async function extractKG(doc) {
+  const r = await callAI($('pModEval').value,
+    'Extraes un grafo de conocimiento (entidades y afirmaciones factuales con su apoyo) de un documento. Respondes solo con JSON válido.',
+    'Extrae las entidades principales y las afirmaciones factuales clave del documento. Para cada afirmación indica si está APOYADA por datos, citas o evidencia DENTRO del propio documento, o si es una aseveración sin respaldo. Máx. 12 entidades y 12 afirmaciones.\n\nDOCUMENTO:\n' + doc.slice(0, 8000) +
+    '\n\nJSON: {"entidades":[{"nombre":"...","tipo":"..."}],"afirmaciones":[{"texto":"...","apoyada":true,"evidencia":"..."}]}', { temperature: 0, maxTokens: 2000 });
+  return { entidades: r.entidades || [], afirmaciones: r.afirmaciones || [] };
+}
+function kgSerialize(kg) {
+  if (!kg) return '(sin grafo)';
+  const sin = kg.afirmaciones.filter(a => !a.apoyada);
+  return 'ENTIDADES: ' + kg.entidades.map(e => e.nombre + ' (' + e.tipo + ')').join(', ') +
+    '\nAFIRMACIONES SIN APOYO (candidatas prioritarias a reforzar con evidencia): ' +
+    (sin.length ? sin.map(a => '· ' + a.texto).join('\n') : 'ninguna');
+}
+
+/* ══════════════ Loop principal sobre el DAG ══════════════ */
+async function runLoop() {
+  if (S.running) return;
+  const val = validar(); if (!val.ok) { renderValidacion(val); return; }
+  S.running = true; S.abort = new AbortController();
+  $('btnStart').disabled = true; $('btnStop').disabled = false;
+  $('livelog').textContent = '';
+  S.experiments = []; S.searches = []; S.history = []; S.scoreSeries = []; S.nodes = []; NODE_SEQ = 0; S.kg = null; S.bestNodeId = null;
+  S.cost = { calls: 0, tin: 0, tout: 0, usd: 0 };
+  const maxIter = parseInt($('pMaxIter').value, 10), objetivo = parseFloat($('pObjetivo').value);
+  const K = parseInt($('pK').value, 10), N = parseInt($('pN').value, 10), M = parseInt($('pM').value, 10);
+  const strategy = $('pStrategy').value, beamW = parseInt($('pBeam').value, 10);
+  const orig = S.doc.text;
+  const refCounts = getRestricciones().map(s => [s, countOcc(orig, s)]).filter(x => x[1] > 0);
+  log('🧪 Restricciones verificables: ' + refCounts.length + ' · estrategia de exploración: ' + strategy);
+  const grounding = () => S.kg ? kgSerialize(S.kg) : '(desactivado)';
+  try {
+    if ($('kgOn').checked) {
+      log('🕸 Extrayendo grafo de conocimiento (world model) del baseline…');
+      S.kg = await extractKG(orig); renderKG();
+      log('  entidades: ' + S.kg.entidades.length + ' · afirmaciones sin apoyo: ' + S.kg.afirmaciones.filter(a => !a.apoyada).length, 'ok');
+    }
+    log('📏 Evaluando baseline (mediana de ' + $('pMed').value + ')…');
+    let ev = await evaluar(orig);
+    S.baselineEval = ev; S.lastEval = ev;
+    const root = newNode({ parent: null, hip: 'Baseline', tipo: 'root', patches: null, ev, status: 'root', iter: 0, sources: [], doc: orig });
+    S.scoreSeries.push({ iter: 0, visible: ev.total, oculto: ev.hidden, usd: S.cost.usd });
+    log('Baseline [' + root.id + ']: ' + ev.total + '/10 (oculto ' + (ev.hidden ?? '—') + ', rango ' + ev.rango + ')', 'ok');
+    pushExp({ n: 0, node: root.id, base: '—', tipo: 'baseline', hip: 'Baseline', diff: null, antes: '—', despues: ev.total, rango: ev.rango, gates: null, res: 'BASELINE', fuentes: [] });
+    renderGraph(); renderGraphOps();
+    let stall = 0;
+    for (let iter = 1; iter <= maxIter && S.running; iter++) {
+      const best = bestNode();
+      if (best.ev.total >= objetivo) { log('🎯 Objetivo alcanzado en [' + best.id + '].', 'ok'); break; }
+      const base = pickBase(strategy, beamW, iter);
+      const estructural = N > 0 && iter % N === 0;
+      const tipo = estructural ? 'estructural' : 'local';
+      const baseDoc = base.doc, baseEv = base.ev;
+      $('stIter').textContent = iter + '/' + maxIter;
+      log('── Iter ' + iter + ' · ramifica desde [' + base.id + '] (' + baseEv.total + ') ' + tipo + ' · débil ' + baseEv.criterioBajo + ' — ' + baseEv.razon);
+
+      let webCtx = '', fuentesTxt = '(ninguna)', fuentes = [];
+      if ($('wsOn').checked) {
+        const q = (baseEv.criterioBajoNombre + ' ' + baseEv.razon).slice(0, 120);
+        log('🔍 Buscando evidencia (' + $('wsDepth').value + '): "' + q + '"');
+        const ws = await buscarWeb(q, iter);
+        fuentes = ws.fuentes;
+        if (fuentes.length) {
+          webCtx = 'CONTEXTO WEB:\n' + (ws.resumen ? 'RESUMEN: ' + ws.resumen + '\n' : '') + fuentes.map(f => '- ' + f.titulo + ' — ' + f.snippet).join('\n');
+          fuentesTxt = fuentes.map(f => f.titulo + ' (' + f.url + ')').join('\n');
+        }
+      }
+      const cands = [];
+      for (let k = 0; k < K && S.running; k++) {
+        try {
+          const h = await experimentar(baseDoc, baseEv, tipo, webCtx, fuentesTxt, grounding());
+          const ap = aplicarParches(baseDoc, h.parches, tipo);
+          if (!ap.ok) { log('  h' + (k + 1) + ' ✗ parche inválido: ' + ap.err, 'wr');
+            const nd = newNode({ parent: base.id, hip: h.hipotesis || '(sin hip.)', tipo, patches: h.parches, ev: null, status: 'invalid', iter, sources: fuentes });
+            pushExp({ n: iter, node: nd.id, base: base.id, tipo, hip: nd.hip, diff: h.parches, antes: baseEv.total, despues: '—', rango: '—', gates: null, res: 'INVALIDO', fuentes });
+            S.history.push({ hip: nd.hip, res: 'parche inválido' }); continue; }
+          const vr = verificarRestricciones(ap.text, refCounts);
+          if (!vr.ok) { log('  h' + (k + 1) + ' ⛔ restricción: "' + vr.violada.slice(0, 40) + '"', 'ko');
+            const nd = newNode({ parent: base.id, hip: h.hipotesis, tipo, patches: ap.parches, ev: null, status: 'blocked', iter, sources: fuentes });
+            pushExp({ n: iter, node: nd.id, base: base.id, tipo, hip: h.hipotesis, diff: ap.parches, antes: baseEv.total, despues: '—', rango: '—', gates: null, res: 'RESTRICCION', fuentes });
+            S.history.push({ hip: h.hipotesis, res: 'violó restricciones' }); continue; }
+          const cev = await evaluar(ap.text);
+          log('  h' + (k + 1) + ' "' + String(h.hipotesis).slice(0, 64) + '" → ' + cev.total);
+          cands.push({ h, text: ap.text, parches: ap.parches, ev: cev });
+        } catch (e) { if (e.name === 'AbortError') throw e; log('  h' + (k + 1) + ' error: ' + e.message, 'ko'); }
+      }
+      if (!cands.length) { stall++; if (stall >= M) { log('⏸ Estancamiento (' + M + ').', 'wr'); break; } continue; }
+      cands.sort((a, b) => b.ev.total - a.ev.total);
+      let cand = cands[0];
+      let g = await puertas(baseDoc, baseEv, cand);
+      if (!g.ok && estructural && S.running) {
+        log('  ↳ estructural rechazado; horizonte 2…', 'wr');
+        try {
+          const h2 = await experimentar(cand.text, cand.ev, 'local', webCtx, fuentesTxt, grounding());
+          const ap2 = aplicarParches(cand.text, h2.parches, 'local');
+          if (ap2.ok && verificarRestricciones(ap2.text, refCounts).ok) {
+            const ev2 = await evaluar(ap2.text);
+            const c2 = { h: { hipotesis: cand.h.hipotesis + ' + seguimiento: ' + h2.hipotesis }, text: ap2.text, parches: cand.parches.concat(ap2.parches), ev: ev2 };
+            const g2 = await puertas(baseDoc, baseEv, c2);
+            if (g2.ok) { cand = c2; g = g2; log('  ↳ horizonte 2 aceptado', 'ok'); }
+          }
+        } catch (e) { if (e.name === 'AbortError') throw e; }
+      }
+      if (g.ok) {
+        const nd = newNode({ parent: base.id, hip: cand.h.hipotesis, tipo, patches: cand.parches, ev: cand.ev, status: 'kept', iter, sources: fuentes, doc: cand.text });
+        stall = 0;
+        const nb = bestNode();
+        log('✔ CONSERVADO [' + nd.id + '] Δ' + g.delta + ' → ' + cand.ev.total + '/10 (pares ' + g.juicio.wins + '/3)' + (nb.id === nd.id ? ' ★ nuevo mejor' : ''), 'ok');
+        pushExp({ n: iter, node: nd.id, base: base.id, tipo, hip: cand.h.hipotesis, diff: cand.parches, antes: baseEv.total, despues: cand.ev.total, rango: cand.ev.rango, gates: g, res: 'CONSERVADO', fuentes });
+      } else {
+        stall++;
+        const motivo = !g.g1 ? 'margen (Δ' + g.delta + ')' : !g.g2 ? 'pareto (' + g.g2crit + ')' : 'pares (' + (g.juicio ? g.juicio.wins : 0) + '/3)';
+        log('✗ REVERTIDO por ' + motivo + ' (queda como evidencia en el grafo)', 'ko');
+        const nd = newNode({ parent: base.id, hip: cand.h.hipotesis, tipo, patches: cand.parches, ev: cand.ev, status: 'reverted', iter, sources: fuentes });
+        S.history.push({ hip: cand.h.hipotesis, res: 'rechazada por puerta ' + motivo });
+        pushExp({ n: iter, node: nd.id, base: base.id, tipo, hip: cand.h.hipotesis, diff: cand.parches, antes: baseEv.total, despues: cand.ev.total, rango: cand.ev.rango, gates: g, res: 'REVERTIDO', fuentes });
+      }
+      const gb = bestNode(); S.lastEval = gb.ev; S.bestNodeId = gb.id;
+      S.scoreSeries.push({ iter, visible: gb.ev.total, oculto: gb.ev.hidden, usd: S.cost.usd });
+      $('stScore').textContent = gb.ev.total; $('stKeeps').textContent = retained().length - 1;
+      if ($('stNodes')) $('stNodes').textContent = S.nodes.length;
+      $('stEff').textContent = S.cost.usd > 0 ? ((gb.ev.total - S.baselineEval.total) / S.cost.usd).toFixed(2) : '—';
+      renderCharts(); renderGraph(); renderGraphOps(); saveSession();
+      if (stall >= M) { log('⏸ Parada por estancamiento (' + M + ').', 'wr'); break; }
+    }
+    const gb = bestNode(); S.finalDoc = gb.doc; S.bestNodeId = gb.id;
+    const lin = lineage(gb);
+    log('🏁 Fin. Mejor nodo [' + gb.id + '] ' + gb.ev.total + '/10 (baseline ' + S.baselineEval.total + ') · linaje de ' + (lin.length - 1) + ' cambios · ' + S.nodes.length + ' nodos · ' + leaves().length + ' hojas · $' + S.cost.usd.toFixed(4), 'ok');
+  } catch (e) {
+    if (e.name === 'AbortError') { const gb = bestNode(); if (gb) { S.finalDoc = gb.doc; S.bestNodeId = gb.id; } log('⏹ Detenido. Se conserva el mejor nodo del grafo.', 'wr'); }
+    else log('💥 Error: ' + e.message, 'ko');
+  }
+  S.running = false; $('btnStart').disabled = false; $('btnStop').disabled = true; $('btnMeta').disabled = !S.experiments.length;
+  renderFinal(); renderCritCompare(); renderGamingAlert(); renderGraph(); renderGraphOps(); saveSession();
+}
+/* ══════════════ UI: pestañas, coste, validación ══════════════ */
+function showTab(t) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.t === t));
+  document.querySelectorAll('section.panel').forEach(p => p.classList.toggle('show', p.id === 'p-' + t));
+  if (t === 'ejecutar') { renderResumen(); renderValidacion(validar()); }
+  if (t === 'resultados') { renderCharts(); }
+}
+function renderCost() {
+  $('costlive').textContent = S.cost.calls + ' llamadas · ' + (S.cost.tin + S.cost.tout).toLocaleString() + ' tokens · $' + S.cost.usd.toFixed(4);
+}
+function estimar() {
+  const med = parseInt($('pMed').value, 10), K = parseInt($('pK').value, 10), it = parseInt($('pMaxIter').value, 10);
+  const callsIter = K + (K + 0) * med + 3; // K hipótesis + K evaluaciones×mediana + 3 juicios
+  $('estCalls').textContent = '~' + callsIter;
+  const docTok = S.doc ? Math.ceil(S.doc.text.length / 4) : 2000;
+  const pe = PRICES[$('pModEval').value], px = PRICES[$('pModExp').value];
+  const inTokIter = (K * med + 3) * (docTok + 600) + K * (docTok + 1200);
+  const outTokIter = (K * med + 3) * 250 + K * 800;
+  const per = (i, pIn, pOut) => (i.in * pIn + i.out * pOut) / 1e6;
+  const cIter = per({ in: (K * med + 3) * (docTok + 600), out: (K * med + 3) * 250 }, pe.in, pe.out) + per({ in: K * (docTok + 1200), out: K * 800 }, px.in, px.out);
+  void inTokIter; void outTokIter;
+  $('estMin').textContent = '$' + (cIter * Math.min(3, it)).toFixed(2);
+  $('estMax').textContent = '$' + (cIter * it * 1.3).toFixed(2);
+}
+function validar() {
+  const errs = [];
+  if (!$('apikey').value.trim()) errs.push('Falta la API key de OpenAI.');
+  if (!S.doc) errs.push('No hay documento cargado.');
+  const w = S.rubric.filter(c => !c.oculto).reduce((a, c) => a + (+c.peso || 0), 0);
+  if (!S.rubric.filter(c => !c.oculto).length) errs.push('La rúbrica no tiene criterios visibles.');
+  else if (w !== 100) errs.push('Los pesos visibles suman ' + w + '% (deben sumar 100%).');
+  if ($('wsOn').checked && ($('wsFuentes').value !== 'acad') && !$('tavilykey').value.trim()) errs.push('Búsqueda Tavily activada sin key.');
+  return { ok: !errs.length, errs };
+}
+function renderValidacion(v) {
+  $('validacion').innerHTML = v.ok ? '<div class="notice">✅ Listo para iniciar.</div>'
+    : '<div class="notice bad"><b>Antes de ejecutar:</b><br>' + v.errs.map(e => '• ' + e).join('<br>') + '</div>';
+  $('btnStart').disabled = !v.ok || S.running;
+}
+function renderResumen() {
+  const vis = S.rubric.filter(c => !c.oculto).length, hid = S.rubric.length - vis;
+  $('resumen').innerHTML = [
+    ['Documento', S.doc ? S.doc.name + ' (' + S.doc.text.length.toLocaleString() + ' caracteres)' : '—'],
+    ['Rúbrica', vis + ' criterios visibles + ' + hid + ' ocultos'],
+    ['Objetivo / iteraciones', $('pObjetivo').value + '/10 · máx. ' + $('pMaxIter').value],
+    ['Aceptación', 'Δ≥' + $('pMargen').value + ' · Pareto ε=' + $('pEpsilon').value + ' · pares 2/3'],
+    ['Exploración', 'K=' + $('pK').value + ' hipótesis · estructural cada ' + $('pN').value + ' · estancamiento M=' + $('pM').value],
+    ['Evaluación', 'mediana de ' + $('pMed').value + ' · evaluador ' + $('pModEval').value + ' · experimentador ' + $('pModExp').value],
+    ['Restricciones', getRestricciones().length + ' cadenas protegidas (verificación por código)'],
+    ['Búsqueda web', $('wsOn').checked ? $('wsFuentes').selectedOptions[0].text + ' · profundidad ' + $('wsDepth').value : 'desactivada']
+  ].map(r => '<b>' + r[0] + ':</b> ' + r[1]).join('<br>');
+}
+
+/* ══════════════ Rúbrica ══════════════ */
+function renderTpls() {
+  $('tpls').innerHTML = '';
+  Object.entries(TEMPLATES).forEach(([k, t]) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.innerHTML = '<span class="em">' + t.em + '</span>' + t.nombre;
+    b.classList.toggle('sel', S.tplSel === k);
+    b.onclick = () => { S.tplSel = k;
+      S.rubric = t.crit.map(c => ({ nombre: c[0], desc: c[1], peso: c[2], oculto: false }));
+      S.rubric.push(Object.assign({}, HIDDEN_ANTIGAMING));
+      renderTpls(); renderRubric(); };
+    $('tpls').appendChild(b);
+  });
+}
+function renderRubric() {
+  const list = $('critlist'); list.innerHTML = '';
+  S.rubric.forEach((c, i) => {
+    const d = document.createElement('div'); d.className = 'crit';
+    d.innerHTML = '<span class="cid">C' + (i + 1) + '</span>' +
+      '<input type="text" value="" data-f="nombre" placeholder="Nombre" aria-label="Nombre del criterio C' + (i + 1) + '">' +
+      '<input type="text" value="" data-f="desc" placeholder="Descripción evaluable" aria-label="Descripción">' +
+      '<div class="row" style="flex-wrap:nowrap"><input type="number" value="' + c.peso + '" data-f="peso" min="0" max="100" style="width:58px" aria-label="Peso">%</div>' +
+      '<button class="eyebtn' + (c.oculto ? ' hid' : '') + '" title="' + (c.oculto ? 'Oculto: el experimentador no lo ve' : 'Visible') + '" aria-label="Alternar oculto">' + (c.oculto ? '👁 oculto' : '👁') + '</button>' +
+      '<button class="eyebtn" title="Eliminar" aria-label="Eliminar criterio">✕</button>';
+    d.querySelector('[data-f=nombre]').value = c.nombre;
+    d.querySelector('[data-f=desc]').value = c.desc;
+    d.querySelectorAll('input').forEach(inp => inp.oninput = () => {
+      c[inp.dataset.f] = inp.dataset.f === 'peso' ? (+inp.value || 0) : inp.value; renderWsum(); });
+    const [eye, del] = d.querySelectorAll('.eyebtn');
+    eye.onclick = () => { c.oculto = !c.oculto; if (c.oculto) c.peso = 0; renderRubric(); };
+    del.onclick = () => { S.rubric.splice(i, 1); renderRubric(); };
+    list.appendChild(d);
+  });
+  renderWsum();
+}
+function renderWsum() {
+  const w = S.rubric.filter(c => !c.oculto).reduce((a, c) => a + (+c.peso || 0), 0);
+  const el = $('wsum'); el.textContent = w + '% / 100%'; el.className = 'wsum ' + (w === 100 ? 'ok' : 'bad');
+}
+function equilibrar() {
+  const vis = S.rubric.filter(c => !c.oculto); if (!vis.length) return;
+  const base = Math.floor(100 / vis.length);
+  vis.forEach((c, i) => c.peso = base + (i < 100 - base * vis.length ? 1 : 0));
+  renderRubric();
+}
+async function sugerirIA() {
+  if (!S.doc) { alert('Sube primero un documento.'); return; }
+  if (!$('apikey').value.trim()) { alert('Configura la API key.'); return; }
+  $('btnSugerirIA').disabled = true; $('btnSugerirIA').textContent = '✨ Analizando…';
+  try {
+    const r = await callAI($('pModEval').value,
+      'Diseñas rúbricas de evaluación. Respondes solo con JSON válido.',
+      'Analiza este documento y propone 4-5 criterios de evaluación independientes y objetivamente evaluables, con pesos que sumen 100. Documento (extracto):\n\n' + S.doc.text.slice(0, 6000) +
+      '\n\nJSON: {"criterios":[{"nombre":"...","desc":"...","peso":N}]}', { temperature: 0.3 });
+    if (r.criterios && r.criterios.length) {
+      S.rubric = r.criterios.map(c => ({ nombre: c.nombre, desc: c.desc, peso: +c.peso || 0, oculto: false }));
+      S.rubric.push(Object.assign({}, HIDDEN_ANTIGAMING));
+      S.tplSel = 'custom'; renderTpls(); renderRubric();
+    }
+  } catch (e) { alert('Error: ' + e.message); }
+  $('btnSugerirIA').disabled = false; $('btnSugerirIA').textContent = '✨ Sugerir con IA';
+}
+function autoDetectRestr() {
+  if (!S.doc) { alert('Sube primero un documento.'); return; }
+  const t = S.doc.text, out = new Set();
+  (t.match(/\d[\d.,]*\s?%?/g) || []).filter(x => x.replace(/\D/g, '').length >= 2).slice(0, 25).forEach(x => out.add(x.trim()));
+  (t.match(/[«"“]([^»"”]{4,90})[»"”]/g) || []).slice(0, 10).forEach(x => out.add(x));
+  (t.match(/\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)+\b/g) || []).slice(0, 15).forEach(x => out.add(x));
+  $('restricciones').value = [...out].slice(0, 40).join('\n');
+  $('restrinfo').textContent = out.size + ' cadenas detectadas — revisa y borra las que no sean críticas.';
+}
+
+/* ══════════════ Render: tabla, diff, gráficas ══════════════ */
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function gatesHTML(g) {
+  if (!g) return '<span class="gates"><span class="gate skip">—</span></span>';
+  const gg = (v, lbl) => '<span class="gate ' + (v === null ? 'skip' : v ? 'pass' : 'fail') + '">' + lbl + '</span>';
+  return '<span class="gates">' + gg(g.g1, 'Δ' + g.delta) + gg(g.g2, 'pareto') + gg(g.g3, 'pares' + (g.juicio ? ' ' + g.juicio.wins + '/3' : '')) + '</span>';
+}
+function diffHTML(parches) {
+  if (!parches || !parches.length) return '—';
+  return '<details class="dif"><summary>' + parches.length + ' parche(s)</summary>' +
+    parches.map(p => '<pre><del>' + esc(String(p.buscar).slice(0, 220)) + '</del>\n<ins>' + esc(String(p.reemplazar).slice(0, 220)) + '</ins></pre>').join('') + '</details>';
+}
+function renderExpTable() {
+  const badge = { CONSERVADO: '<span class="badge keep">✔ conservado</span>', REVERTIDO: '<span class="badge rev">↩ revertido</span>',
+    RESTRICCION: '<span class="badge blk">⛔ restricciones</span>', INVALIDO: '<span class="badge inv">parche inválido</span>', BASELINE: '<span class="badge inv">baseline</span>' };
+  $('expbody').innerHTML = S.experiments.map(e =>
+    '<tr><td class="mono">' + e.n + '</td><td>' + esc(e.tipo) + '</td><td>' + esc(String(e.hip).slice(0, 160)) + '</td>' +
+    '<td class="diffcell">' + diffHTML(e.diff) + '</td>' +
+    '<td class="mono">' + e.antes + ' → ' + e.despues + '</td><td class="mono">' + (e.rango ?? '—') + '</td>' +
+    '<td>' + gatesHTML(e.gates) + '</td><td>' + (badge[e.res] || esc(e.res)) + '</td>' +
+    '<td>' + (e.fuentes && e.fuentes.length ? e.fuentes.map(f => '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.src) + '</a>').join(' · ') : '—') + '</td></tr>'
+  ).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--ink-soft)">Sin experimentos.</td></tr>';
+}
+function drawLines(canvas, series, opts = {}) {
+  const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height, P = 36;
+  c.clearRect(0, 0, W, H); c.font = '10px IBM Plex Mono, monospace'; c.strokeStyle = '#DCE2DF'; c.fillStyle = '#4A5568';
+  const all = series.flatMap(s => s.data).filter(v => v != null);
+  if (!all.length) { c.fillText('Sin datos aún', W / 2 - 30, H / 2); return; }
+  let min = Math.min(...all), max = Math.max(...all); if (min === max) { min -= 1; max += 1; }
+  if (opts.pad) { min -= (max - min) * .1; max += (max - min) * .1; }
+  const nx = Math.max(...series.map(s => s.data.length));
+  const X = i => P + (W - P - 10) * (nx > 1 ? i / (nx - 1) : 0), Y = v => H - P + (P + 14 - H) * ((v - min) / (max - min));
+  for (let g = 0; g <= 4; g++) { const v = min + (max - min) * g / 4, y = Y(v);
+    c.beginPath(); c.moveTo(P, y); c.lineTo(W - 10, y); c.stroke(); c.fillText(v.toFixed(2), 2, y + 3); }
+  series.forEach(s => { c.strokeStyle = s.color; c.lineWidth = 2; c.beginPath();
+    s.data.forEach((v, i) => { if (v == null) return; const x = X(i), y = Y(v); i === 0 ? c.moveTo(x, y) : c.lineTo(x, y); }); c.stroke();
+    c.fillStyle = s.color; s.data.forEach((v, i) => { if (v == null) return; c.beginPath(); c.arc(X(i), Y(v), 3, 0, 7); c.fill(); }); });
+  let lx = P; series.forEach(s => { c.fillStyle = s.color; c.fillRect(lx, 4, 10, 10); c.fillStyle = '#1B2430'; c.fillText(s.name, lx + 14, 13); lx += c.measureText(s.name).width + 34; });
+}
+function renderCharts() {
+  drawLines($('chScore'), [
+    { name: 'score visible', color: '#0E7C66', data: S.scoreSeries.map(p => p.visible) },
+    { name: 'score oculto', color: '#A9760B', data: S.scoreSeries.map(p => p.oculto) }], { pad: true });
+  const eff = S.scoreSeries.map(p => p.usd > 0 && S.baselineEval ? +((p.visible - S.baselineEval.total) / p.usd).toFixed(3) : null);
+  drawLines($('chEff'), [{ name: 'Δscore acumulado / $', color: '#1B2430', data: eff }], { pad: true });
+}
+function renderCritCompare() {
+  if (!S.baselineEval || !S.lastEval) { $('critcompare').innerHTML = '<p class="hint">Pendiente de ejecución.</p>'; return; }
+  $('critcompare').innerHTML = '<div class="tablewrap"><table class="exp" style="min-width:0"><thead><tr><th>Criterio</th><th>Inicial</th><th>Final</th><th>Δ</th></tr></thead><tbody>' +
+    S.rubric.map((c, i) => { const id = 'C' + (i + 1), a = S.baselineEval.scores[id], b = S.lastEval.scores[id], d = +(b - a).toFixed(1);
+      return '<tr><td>' + id + ' ' + esc(c.nombre) + (c.oculto ? ' <span class="pill">oculto</span>' : '') + '</td><td class="mono">' + a + '</td><td class="mono">' + b + '</td><td class="mono" style="color:' + (d > 0 ? 'var(--accent)' : d < 0 ? 'var(--revert)' : 'inherit') + '">' + (d > 0 ? '+' : '') + d + '</td></tr>'; }).join('') + '</tbody></table></div>';
+}
+function renderGamingAlert() {
+  const pts = S.scoreSeries.filter(p => p.oculto != null);
+  if (pts.length < 3) { $('gamingalert').innerHTML = ''; return; }
+  const visUp = pts[pts.length - 1].visible - pts[0].visible, hidDn = pts[pts.length - 1].oculto - pts[0].oculto;
+  $('gamingalert').innerHTML = (visUp > 0.3 && hidDn < -0.3)
+    ? '<div class="notice warn">⚠️ <b>Posible gaming de la métrica:</b> el score visible sube (+' + visUp.toFixed(2) + ') mientras el oculto baja (' + hidDn.toFixed(2) + '). Revisa los diffs conservados: el experimentador podría estar optimizando el juez, no el documento.</div>' : '';
+}
+function renderFinal() {
+  if (!S.finalDoc) return;
+  $('btnDownload').disabled = false;
+  const best = S.bestNodeId ? nodeById(S.bestNodeId) : (S.nodes.length ? bestNode() : null);
+  const lin = best ? lineage(best).filter(n => n.status === 'kept') : [];
+  $('docstats').textContent = S.finalDoc.length.toLocaleString() + ' caracteres · linaje ganador ' + (best ? '[' + best.id + ']' : '') + ' con ' + lin.length + ' cambios conservados';
+  $('finaldiff').innerHTML = lin.length
+    ? '<p class="hint">Ruta del baseline al mejor nodo (cada paso superó las tres puertas):</p>' + lin.map(k => '<div class="card"><b>[' + k.id + '] iter ' + k.iter + ' · ' + k.ev.total + '/10:</b> ' + esc(k.hip) + diffHTML(k.patches).replace('<details class="dif"><summary>', '<details class="dif" open><summary>') + '</div>').join('')
+    : '<p class="hint">Ningún cambio superó las tres puertas: el documento final es el original.</p>';
+  const ft = $('finaltext'); ft.style.display = 'block'; ft.textContent = S.finalDoc;
+}
+
+/* ══════════════ Grafo DAG (canvas) ══════════════ */
+const NODE_COLOR = { root: '#13201C', kept: '#0E7C66', reverted: '#C2452D', invalid: '#9AA5A0', blocked: '#A9760B' };
+function renderGraph() {
+  const cv = $('chGraph'); if (!cv) return;
+  const ctx = cv.getContext('2d');
+  if (!S.nodes.length) { ctx.clearRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#4A5568'; ctx.font = '12px IBM Plex Mono'; ctx.fillText('El grafo de experimentos aparecerá aquí al ejecutar.', 20, 30); return; }
+  // profundidad por nodo
+  const depth = {}; S.nodes.forEach(n => { let d = 0, x = n; while (x && x.parent != null) { d++; x = nodeById(x.parent); } depth[n.id] = d; });
+  const maxD = Math.max(...Object.values(depth));
+  const byD = {}; S.nodes.forEach(n => { (byD[depth[n.id]] = byD[depth[n.id]] || []).push(n); });
+  const maxRow = Math.max(...Object.values(byD).map(a => a.length));
+  const P = 34, dx = maxD > 0 ? (cv.width - 2 * P - 40) / maxD : 0, rowH = 40;
+  cv.height = Math.max(220, P * 2 + maxRow * rowH);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const pos = {}; S.graphPos = {};
+  Object.keys(byD).forEach(d => { byD[d].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+    byD[d].forEach((n, i) => { const cnt = byD[d].length;
+      pos[n.id] = { x: P + 30 + d * dx, y: P + rowH / 2 + i * rowH + ((maxRow - cnt) * rowH) / 2 }; }); });
+  const bestLin = S.bestNodeId ? new Set(lineage(nodeById(S.bestNodeId)).map(n => n.id)) : new Set();
+  // aristas
+  S.nodes.forEach(n => { if (n.parent == null) return; const a = pos[n.parent], b = pos[n.id]; if (!a || !b) return;
+    const inBest = bestLin.has(n.id) && bestLin.has(n.parent);
+    ctx.strokeStyle = inBest ? '#0E7C66' : '#DCE2DF'; ctx.lineWidth = inBest ? 2.5 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.bezierCurveTo(a.x + dx / 2, a.y, b.x - dx / 2, b.y, b.x, b.y); ctx.stroke(); });
+  // nodos
+  ctx.font = '9px IBM Plex Mono';
+  S.nodes.forEach(n => { const p = pos[n.id]; if (!p) return; S.graphPos[n.id] = p;
+    const r = (n.status === 'kept' || n.status === 'root') ? 9 : 6;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fillStyle = NODE_COLOR[n.status] || '#999'; ctx.fill();
+    if (n.id === S.bestNodeId) { ctx.strokeStyle = '#13201C'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, 7); ctx.stroke(); }
+    ctx.fillStyle = '#1B2430'; ctx.fillText(n.id + (n.ev ? ' ' + n.ev.total : ''), p.x + r + 3, p.y + 3); });
+}
+function renderGraphOps() {
+  const el = $('graphops'); if (!el) return;
+  if (!S.nodes.length) { el.innerHTML = '<p class="hint">Sin grafo todavía.</p>'; return; }
+  const R = retained(), L = leaves(), best = S.bestNodeId ? nodeById(S.bestNodeId) : bestNode();
+  const lin = best ? lineage(best) : [];
+  el.innerHTML =
+    '<div class="statbar">' +
+    '<div><b>' + S.nodes.length + '</b><span>nodos totales</span></div>' +
+    '<div><b>' + (R.length - 1) + '</b><span>conservados</span></div>' +
+    '<div><b>' + S.nodes.filter(n => n.status === 'reverted').length + '</b><span>evidencia (revertidos)</span></div>' +
+    '<div><b>' + L.length + '</b><span>hojas (frontera)</span></div>' +
+    '<div><b>' + (best ? best.ev.total : '—') + '</b><span>mejor score [' + (best ? best.id : '—') + ']</span></div>' +
+    '</div>' +
+    '<p class="hint"><b>Linaje ganador:</b> ' + (lin.length ? lin.map(n => n.id).join(' → ') : '—') + '</p>' +
+    '<p class="hint"><b>Frontera sin explorar (hojas):</b> ' + (L.length ? L.map(n => n.id + ' (' + n.ev.total + ')').join(' · ') : '—') + '</p>' +
+    '<div class="leyenda">' + Object.entries({ root: 'baseline', kept: 'conservado', reverted: 'revertido (evidencia)', blocked: 'restricción', invalid: 'parche inválido' }).map(([k, v]) => '<span><i style="background:' + NODE_COLOR[k] + '"></i>' + v + '</span>').join('') + '</div>';
+}
+function renderKG() {
+  const el = $('kgout'); if (!el) return;
+  if (!S.kg) { el.innerHTML = '<p class="hint">🕸 Actívalo en Configuración para extraer el world model del documento (entidades y afirmaciones con su apoyo). Sirve para que el Experimentador priorice reforzar las afirmaciones sin evidencia.</p>'; return; }
+  const sin = S.kg.afirmaciones.filter(a => !a.apoyada);
+  el.innerHTML = '<div class="grid2"><div><h3 style="margin-top:0">Entidades (' + S.kg.entidades.length + ')</h3>' +
+    S.kg.entidades.map(e => '<span class="pill" style="margin:2px;display:inline-block">' + esc(e.nombre) + ' · ' + esc(e.tipo) + '</span>').join(' ') + '</div>' +
+    '<div><h3 style="margin-top:0">Afirmaciones sin apoyo (' + sin.length + '/' + S.kg.afirmaciones.length + ')</h3>' +
+    (S.kg.afirmaciones.length ? S.kg.afirmaciones.map(a => '<div class="srcitem"><span class="pill" style="background:' + (a.apoyada ? 'var(--accent-soft)' : 'var(--revert-soft)') + '">' + (a.apoyada ? '✔ apoyada' : '✕ sin apoyo') + '</span> ' + esc(a.texto) + (a.evidencia ? '<br><span class="hint">' + esc(a.evidencia) + '</span>' : '') + '</div>').join('') : '<p class="hint">—</p>') +
+    '</div></div>';
+}
+function renderSearches() {
+  $('searchlist').innerHTML = S.searches.length ? S.searches.map(s =>
+    '<div class="card"><b class="mono">iter ' + s.iter + '</b> · consulta: <i>' + esc(s.query) + '</i>' +
+    s.fuentes.map(f => '<div class="srcitem"><span class="pill">' + esc(f.src) + '</span> <a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.titulo) + '</a><br><span class="hint">' + esc(f.snippet) + '</span></div>').join('') + '</div>').join('')
+    : '<p class="hint">🔍 Las búsquedas realizadas durante el loop aparecerán aquí.</p>';
+}
+
+/* ══════════════ Agentes & Prompts ══════════════ */
+function renderAgents() {
+  const box = $('agentboxes'); box.innerHTML = '';
+  AGENT_META.forEach(a => {
+    const d = document.createElement('div'); d.className = 'agentbox';
+    d.innerHTML = '<div class="ah"><b>' + a.nombre + '</b><span class="hint">' + a.desc + '</span><span class="spacer" style="flex:1"></span><button class="btn mini" data-r="1">↺ Restaurar</button></div>' +
+      '<div class="ab"><div class="vars">Variables: ' + a.vars + '</div>' +
+      '<label>System prompt</label><textarea data-p="' + a.sys + '"></textarea>' +
+      '<label style="margin-top:8px">User prompt</label><textarea data-p="' + a.usr + '" style="min-height:150px"></textarea>' +
+      '<div class="jsonfix">Formato de respuesta esperado (no modificar): ' + esc(a.json) + '</div></div>';
+    d.querySelectorAll('textarea').forEach(t => t.value = PROMPTS[t.dataset.p]);
+    d.querySelector('[data-r]').onclick = () => { PROMPTS[a.sys] = DEFAULT_PROMPTS[a.sys]; PROMPTS[a.usr] = DEFAULT_PROMPTS[a.usr]; renderAgents(); };
+    box.appendChild(d);
+  });
+  const sk = document.createElement('div'); sk.className = 'agentbox';
+  sk.innerHTML = '<div class="ah"><b>Skill AutoImprove (contexto compartido)</b><span class="hint">Se inyecta como {SKILL} en el Experimentador — tu program.md</span><span style="flex:1"></span><button class="btn mini" data-r>↺ Restaurar</button></div>' +
+    '<div class="ab"><textarea data-p="skill" style="min-height:180px"></textarea></div>';
+  sk.querySelector('textarea').value = PROMPTS.skill;
+  sk.querySelector('[data-r]').onclick = () => { PROMPTS.skill = DEFAULT_PROMPTS.skill; renderAgents(); };
+  box.appendChild(sk);
+}
+function savePrompts() {
+  document.querySelectorAll('#agentboxes textarea').forEach(t => PROMPTS[t.dataset.p] = t.value);
+  localStorage.setItem(LS.prompts, JSON.stringify(PROMPTS));
+  alert('Prompts guardados. Se aplican en la siguiente ejecución.');
+}
+
+/* ══════════════ Meta-agente ══════════════ */
+async function runMeta() {
+  if (!S.experiments.length) return;
+  $('btnMeta').disabled = true; $('btnMeta').textContent = '🧠 Analizando…';
+  try {
+    const tabla = S.experiments.map(e => [e.n, e.tipo, e.res, 'Δ' + (e.gates ? e.gates.delta : '—'),
+      e.gates ? ('puertas m:' + e.gates.g1 + ' p:' + e.gates.g2 + ' j:' + e.gates.g3) : '', String(e.hip).slice(0, 120)].join(' | ')).join('\n');
+    const r = await callAI($('pModEval').value, PROMPTS.metaSys, fill(PROMPTS.metaUser, { TABLA_EXPERIMENTOS: tabla, SKILL: PROMPTS.skill }), { temperature: 0.4 });
+    let html = '<div class="card"><h3 style="margin-top:0">Diagnóstico</h3><p>' + esc(r.diagnostico) + '</p></div>';
+    (r.propuestas || []).forEach((p, i) => {
+      html += '<div class="card" id="metaprop' + i + '"><b>Propuesta ' + (i + 1) + '</b>' +
+        '<pre style="white-space:pre-wrap;font-size:.74rem"><del>' + esc(p.seccion_skill) + '</del>\n<ins>' + esc(p.cambio) + '</ins></pre>' +
+        '<div class="row"><button class="btn mini primary" data-a="' + i + '">✔ Aprobar</button><button class="btn mini" data-x="' + i + '">✕ Rechazar</button></div></div>';
+    });
+    $('metaout').innerHTML = html;
+    $('metaout').querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      const p = r.propuestas[+b.dataset.a];
+      if (p.seccion_skill !== 'AÑADIR' && PROMPTS.skill.includes(p.seccion_skill)) PROMPTS.skill = PROMPTS.skill.replace(p.seccion_skill, p.cambio);
+      else PROMPTS.skill += '\n' + p.cambio;
+      localStorage.setItem(LS.prompts, JSON.stringify(PROMPTS)); renderAgents();
+      $('metaprop' + b.dataset.a).innerHTML = '<span class="badge keep">✔ aplicado al skill para la próxima ejecución</span>';
+    });
+    $('metaout').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { $('metaprop' + b.dataset.x).innerHTML = '<span class="badge rev">✕ rechazada</span>'; });
+  } catch (e) { $('metaout').innerHTML = '<div class="notice bad">Error: ' + esc(e.message) + '</div>'; }
+  $('btnMeta').disabled = false; $('btnMeta').textContent = '🧠 Analizar ejecución';
+}
+
+/* ══════════════ Sesión ══════════════ */
+function saveSession() {
+  try {
+    const nodesLite = S.nodes.map(n => ({ id: n.id, parent: n.parent, hip: n.hip, tipo: n.tipo, patches: n.patches, ev: n.ev, status: n.status, iter: n.iter, sources: n.sources }));
+    localStorage.setItem(LS.session, JSON.stringify({
+    t: Date.now(), doc: S.doc, rubric: S.rubric, experiments: S.experiments, searches: S.searches,
+    scoreSeries: S.scoreSeries, cost: S.cost, finalDoc: S.finalDoc, nodes: nodesLite, kg: S.kg, bestNodeId: S.bestNodeId,
+    baselineEval: S.baselineEval, lastEval: S.lastEval, history: S.history,
+    params: ['pObjetivo','pMaxIter','pMargen','pEpsilon','pK','pN','pM','pMed','pModEval','pModExp','pFormato','pStrategy','pBeam','wsFuentes','wsDepth'].reduce((o, k) => ($(k) && (o[k] = $(k).value), o), {}),
+    wsOn: $('wsOn').checked, kgOn: $('kgOn').checked, restricciones: $('restricciones').value })); } catch (e) {}
+}
+function restoreSession() {
+  try { const d = JSON.parse(localStorage.getItem(LS.session)); if (!d) return;
+    Object.assign(S, { doc: d.doc, rubric: d.rubric || [], experiments: d.experiments || [], searches: d.searches || [],
+      scoreSeries: d.scoreSeries || [], cost: d.cost || S.cost, finalDoc: d.finalDoc, nodes: d.nodes || [], kg: d.kg || null, bestNodeId: d.bestNodeId || null,
+      baselineEval: d.baselineEval, lastEval: d.lastEval, history: d.history || [] });
+    Object.entries(d.params || {}).forEach(([k, v]) => { if ($(k)) $(k).value = v; });
+    $('wsOn').checked = !!d.wsOn; $('wsopts').style.display = d.wsOn ? 'block' : 'none';
+    $('kgOn').checked = !!d.kgOn;
+    $('restricciones').value = d.restricciones || '';
+    if (S.doc) showDocInfo();
+    renderRubric(); renderExpTable(); renderCharts(); renderSearches(); renderFinal(); renderCritCompare(); renderGamingAlert(); renderGraph(); renderGraphOps(); renderKG(); renderCost(); estimar();
+    $('btnMeta').disabled = !S.experiments.length;
+    $('pBeamWrap').style.display = $('pStrategy').value === 'beam' ? 'block' : 'none';
+  } catch (e) {}
+  $('restorebar').style.display = 'none';
+}
+
+/* ══════════════ Carga de documento ══════════════ */
+function showDocInfo() {
+  $('docinfo').textContent = '✅ ' + S.doc.name + ' — ' + S.doc.text.length.toLocaleString() + ' caracteres';
+  const pv = $('docpreview'); pv.style.display = 'block';
+  pv.textContent = S.doc.text.slice(0, 600) + (S.doc.text.length > 600 ? '…' : '');
+  estimar();
+}
+async function parseFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  let text = '';
+  if (ext === 'txt' || ext === 'md') text = await file.text();
+  else if (ext === 'docx') { const ab = await file.arrayBuffer(); text = (await window.mammoth.extractRawText({ arrayBuffer: ab })).value; }
+  else if (ext === 'pdf') {
+    const ab = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: ab }).promise;
+    const parts = [];
+    for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p); const tc = await pg.getTextContent();
+      parts.push(tc.items.map(i => i.str).join(' ')); }
+    text = parts.join('\n\n');
+  } else throw new Error('Formato no soportado: .' + ext);
+  if (!text.trim()) throw new Error('El documento está vacío o no se pudo extraer texto.');
+  return text.trim();
+}
+async function loadFile(file) {
+  try {
+    const text = await parseFile(file);
+    S.doc = { name: file.name, text };
+    S.finalDoc = null; showDocInfo(); saveSession();
+  } catch (e) { alert('Error al leer el archivo: ' + e.message); }
+}
+async function loadRefFile(file) {
+  const info = $('refinfo');
+  try {
+    info.textContent = '📖 Leyendo ' + file.name + '…';
+    const text = await parseFile(file);
+    if (!$('apikey').value.trim()) { info.textContent = '❌ Configura primero la API key en ⚙️ Configuración.'; return; }
+    info.textContent = '✨ Analizando el documento de referencia y derivando la rúbrica…';
+    const r = await callAI($('pModEval').value,
+      'Diseñas rúbricas de evaluación a partir de documentos normativos (convocatorias, guías de evaluación, plantillas de criterios). Extraes los criterios que el documento define o implica, con pesos proporcionales a la importancia que el propio documento les da. Respondes solo con JSON válido.',
+      'Este es un DOCUMENTO DE REFERENCIA que define los criterios con los que se evaluará otro documento. Deriva de él una rúbrica de 4-6 criterios independientes y objetivamente evaluables, con pesos que sumen exactamente 100. Si el documento enumera criterios explícitos, respétalos; si no, infiérelos de sus exigencias.\n\nDOCUMENTO DE REFERENCIA (extracto):\n\n' + text.slice(0, 9000) +
+      '\n\nJSON: {"criterios":[{"nombre":"...","desc":"descripción evaluable en una frase","peso":N}]}', { temperature: 0.3, maxTokens: 1500 });
+    if (!r.criterios || !r.criterios.length) throw new Error('la IA no devolvió criterios');
+    S.rubric = r.criterios.map(c => ({ nombre: String(c.nombre || ''), desc: String(c.desc || ''), peso: +c.peso || 0, oculto: false }));
+    const w = S.rubric.reduce((a, c) => a + c.peso, 0);
+    if (w !== 100 && w > 0) { S.rubric.forEach(c => c.peso = Math.round(c.peso * 100 / w)); const d = 100 - S.rubric.reduce((a, c) => a + c.peso, 0); S.rubric[0].peso += d; }
+    S.rubric.push(Object.assign({}, HIDDEN_ANTIGAMING));
+    S.tplSel = 'custom'; renderTpls(); renderRubric(); saveSession();
+    info.textContent = '✅ Rúbrica generada desde "' + file.name + '": ' + (S.rubric.length - 1) + ' criterios + 1 oculto anti-gaming. Revisa nombres, descripciones y pesos antes de ejecutar.';
+  } catch (e) { info.textContent = '❌ Error: ' + e.message; }
+}
+function download() {
+  const fmt = $('pFormato').value, txt = S.finalDoc || '';
+  const base = (S.doc ? S.doc.name.replace(/\.[^.]+$/, '') : 'documento') + '_mejorado';
+  let blob, name;
+  if (fmt === 'doc') {
+    const html = '<html><head><meta charset="utf-8"></head><body>' + txt.split(/\n\n+/).map(p => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('') + '</body></html>';
+    blob = new Blob([html], { type: 'application/msword' }); name = base + '.doc';
+  } else { blob = new Blob([txt], { type: 'text/plain;charset=utf-8' }); name = base + '.' + fmt; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ══════════════ Init ══════════════ */
+function init() {
+  // prompts guardados
+  try { const p = JSON.parse(localStorage.getItem(LS.prompts)); if (p) PROMPTS = Object.assign({}, DEFAULT_PROMPTS, p); } catch (e) {}
+  // keys
+  const k = localStorage.getItem(LS.key); if (k) { $('apikey').value = k; $('keyPersist').checked = true; }
+  const tk = localStorage.getItem(LS.tavily); if (tk) { $('tavilykey').value = tk; $('tavilyPersist').checked = true; }
+  const updKey = () => { const has = !!$('apikey').value.trim();
+    $('keychip').textContent = has ? 'key local · nunca compartida' : 'Sin configurar';
+    $('keychip').classList.toggle('ok', has);
+    if ($('keyPersist').checked && has) localStorage.setItem(LS.key, $('apikey').value.trim()); };
+  $('apikey').addEventListener('input', updKey);
+  $('keyPersist').addEventListener('change', () => { $('keyPersist').checked ? updKey() : localStorage.removeItem(LS.key); });
+  $('btnEye').onclick = () => { $('apikey').type = $('apikey').type === 'password' ? 'text' : 'password'; };
+  $('btnKeyDel').onclick = () => { $('apikey').value = ''; localStorage.removeItem(LS.key); $('keyPersist').checked = false; updKey(); };
+  $('tavilyPersist').addEventListener('change', () => { $('tavilyPersist').checked && $('tavilykey').value.trim() ? localStorage.setItem(LS.tavily, $('tavilykey').value.trim()) : localStorage.removeItem(LS.tavily); });
+  $('tavilykey').addEventListener('input', () => { if ($('tavilyPersist').checked) localStorage.setItem(LS.tavily, $('tavilykey').value.trim()); });
+  $('btnTavilyTest').onclick = async () => {
+    try { const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: $('tavilykey').value.trim(), query: 'test', max_results: 1 }) });
+      $('wsstatus').textContent = r.ok ? '✅ Tavily conectado correctamente.' : '❌ Tavily respondió ' + r.status + ': revisa la key.'; }
+    catch (e) { $('wsstatus').textContent = '❌ Error de red con Tavily.'; } };
+  updKey();
+  // tabs & goto
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.t); });
+  document.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => showTab(b.dataset.goto));
+  // drop
+  const drop = $('drop');
+  drop.onclick = () => $('fileinput').click();
+  drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') $('fileinput').click(); };
+  $('fileinput').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+  ['dragover', 'dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.toggle('over', ev === 'dragover');
+    if (ev === 'drop' && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); }));
+  // dropzone de documento de referencia (rúbrica)
+  const dropRef = $('dropRef');
+  dropRef.onclick = () => $('fileRef').click();
+  dropRef.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') $('fileRef').click(); };
+  $('fileRef').onchange = e => { if (e.target.files[0]) loadRefFile(e.target.files[0]); };
+  ['dragover', 'dragleave', 'drop'].forEach(ev => dropRef.addEventListener(ev, e => {
+    e.preventDefault(); dropRef.classList.toggle('over', ev === 'dragover');
+    if (ev === 'drop' && e.dataTransfer.files[0]) loadRefFile(e.dataTransfer.files[0]); }));
+  // web search toggle
+  $('wsOn').addEventListener('change', () => { $('wsopts').style.display = $('wsOn').checked ? 'block' : 'none'; });
+  // estrategia de exploración del grafo
+  $('pStrategy').addEventListener('change', () => { $('pBeamWrap').style.display = $('pStrategy').value === 'beam' ? 'block' : 'none'; });
+  // detalle de nodo al hacer clic en el grafo
+  const cvG = $('chGraph');
+  if (cvG) cvG.addEventListener('click', e => {
+    const rect = cvG.getBoundingClientRect(); const sx = cvG.width / rect.width, sy = cvG.height / rect.height;
+    const mx = (e.clientX - rect.left) * sx, my = (e.clientY - rect.top) * sy;
+    let hit = null, best = 1e9;
+    Object.entries(S.graphPos).forEach(([id, p]) => { const d = (p.x - mx) ** 2 + (p.y - my) ** 2; if (d < 200 && d < best) { best = d; hit = id; } });
+    if (hit) { const n = nodeById(hit);
+      $('nodedetail').innerHTML = '<div class="card"><b>[' + n.id + ']</b> ' + (n.parent != null ? 'ramificado de [' + n.parent + ']' : 'raíz') + ' · <span class="badge ' + ({ kept: 'keep', root: 'keep', reverted: 'rev', blocked: 'blk', invalid: 'inv' }[n.status]) + '">' + n.status + '</span>' + (n.ev ? ' · score ' + n.ev.total : '') +
+        '<br><b>Hipótesis:</b> ' + esc(n.hip) + (n.patches ? diffHTML(n.patches) : '') + '</div>'; }
+  });
+  // params → estimación
+  ['pObjetivo','pMaxIter','pMargen','pEpsilon','pK','pN','pM','pMed','pModEval','pModExp'].forEach(id => $(id).addEventListener('change', () => {
+    estimar(); $('medwarn').textContent = $('pMed').value === '1' ? '⚠ Con 1 evaluación el juez es ruidoso: usa 3 o 5.' : ''; }));
+  // rúbrica
+  renderTpls(); renderRubric();
+  $('btnAddCrit').onclick = () => { S.rubric.push({ nombre: '', desc: '', peso: 0, oculto: false }); renderRubric(); };
+  $('btnEquil').onclick = equilibrar;
+  $('btnSugerirIA').onclick = sugerirIA;
+  $('btnAutoRestr').onclick = autoDetectRestr;
+  // ejecutar
+  $('btnStart').onclick = runLoop;
+  $('btnStop').onclick = () => { if (S.abort) S.abort.abort(); S.running = false; };
+  $('btnDownload').onclick = download;
+  // agentes
+  renderAgents();
+  $('btnSavePrompts').onclick = savePrompts;
+  $('btnResetAll').onclick = () => { PROMPTS = Object.assign({}, DEFAULT_PROMPTS); localStorage.removeItem(LS.prompts); renderAgents(); };
+  $('btnMeta').onclick = runMeta;
+  // sesión
+  if (localStorage.getItem(LS.session)) {
+    $('restorebar').style.display = 'flex';
+    $('btnRestore').onclick = restoreSession;
+    $('btnDiscard').onclick = () => { localStorage.removeItem(LS.session); $('restorebar').style.display = 'none'; };
+  }
+  estimar(); renderCost();
+}
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</html>
