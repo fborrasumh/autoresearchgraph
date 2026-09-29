@@ -1,6 +1,7 @@
 cff-version: 1.2.0
 message: "Si usas este software, cítalo con estos metadatos."
 title: "AutoResearchGraph"
+abstract: "Mejora automática de documentos con cambios que se miden: un evaluador puntúa con una rúbrica, otro agente propone cambios pequeños en forma de parche y solo se conservan los que superan tres filtros, con criterios ocultos contra las trampas, textos protegidos verificados por código y un grafo de todos los intentos."
 type: software
 authors:
   - family-names: "Borrás Rocher"
@@ -8,8 +9,15 @@ authors:
     affiliation: "Universidad Miguel Hernández de Elche"
     orcid: "https://orcid.org/0000-0002-5519-4573"
 doi: "10.5281/zenodo.21627938"
-version: "1.0.0"
-date-released: "2026-07-27"
+version: "2.0.0"
+date-released: "2026-09-29"
 url: "https://fborrasumh.github.io/autoresearchgraph/"
 repository-code: "https://github.com/fborrasumh/autoresearchgraph"
 license: MIT
+keywords:
+  - "mejora de documentos"
+  - "escritura académica"
+  - "evaluación con rúbrica"
+  - "agentes de IA"
+  - "autoresearch"
+  - "inteligencia artificial"
