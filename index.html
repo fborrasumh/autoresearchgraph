@@ -58,433 +58,775 @@
   };
 })();
 </script>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoResearchGraph — Mejora de documentos como DAG de commits (Karpathy)</title>
+<title>AutoResearchGraph · Mejora un documento con cambios que se miden</title>
+<meta name="description" content="Un evaluador y un experimentador de IA mejoran tu documento con cambios pequeños que solo se conservan si mejoran de verdad según tus criterios. Cada intento queda registrado.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>if(window['pdfjsLib'])pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --paper:#F4F6F5; --card:#FFFFFF; --ink:#1B2430; --ink-soft:#4A5568;
-  --line:#DCE2DF; --accent:#0E7C66; --accent-soft:#E3F1ED;
-  --revert:#C2452D; --revert-soft:#F9E9E5; --warn:#A9760B; --warn-soft:#FBF3DF;
-  --mono:'IBM Plex Mono',ui-monospace,monospace;
-  --body:'IBM Plex Sans',system-ui,sans-serif;
-  --disp:'Space Grotesk',var(--body);
-  --r:10px;
+  --tinta:#0F2237; --acero:#2E4B6B; --acero-claro:#7C93AC; --gris:#5D7691;
+  --papel:#F3F6FA; --blanco:#FFFFFF; --linea:#D8E0E9; --linea-2:#E8EEF4;
+  --brasa:#E4572E; --brasa-osc:#C9441F; --brasa-suave:#FDEBE4;
+  --forjado:#0E7C6B; --forjado-suave:#E0F3EE; --aviso:#8A3617;
+  --c-ctx:#1F6FB2; --c-comp:#6B4FD8; --c-rda:#0E8C7A; --c-tema:#C98200; --c-eval:#E4572E; --c-final:#2E4B6B;
+  --sombra:0 1px 0 rgba(15,34,55,.05), 0 14px 34px -22px rgba(15,34,55,.45);
+  --sombra-alta:0 2px 0 rgba(15,34,55,.04), 0 22px 50px -24px rgba(15,34,55,.55);
+  --r:14px;
+  --display:"Bricolage Grotesque",Georgia,serif;
+  --texto:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;
-  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
-  background-size:32px 32px;background-attachment:fixed}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--papel);color:var(--tinta);font-family:var(--texto);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;padding-bottom:84px}
+a{color:var(--acero)}
+:focus-visible{outline:3px solid var(--brasa);outline-offset:2px;border-radius:6px}
+.hidden{display:none!important}
+svg.i{width:1.15em;height:1.15em;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+code{font-family:var(--mono);font-size:.85em;background:var(--linea-2);padding:1px 5px;border-radius:5px}
 
-/* header */
-header{background:#13201C;color:#EDF3F0;padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(19,32,28,.25)}
-header .logo{font-family:var(--disp);font-weight:700;font-size:1.25rem;letter-spacing:.01em}
-header .logo span{color:#7BD4C0}
-header .ver{font-family:var(--mono);font-size:.7rem;background:#1E332C;padding:2px 8px;border-radius:20px;color:#9DC7BA}
-header .spacer{flex:1}
-.keychip{font-family:var(--mono);font-size:.72rem;padding:4px 10px;border-radius:20px;border:1px solid #2C4A40;color:#9DC7BA}
-.keychip.ok{border-color:#2E7D63;color:#7BD4C0}
-.costlive{font-family:var(--mono);font-size:.72rem;color:#C8D8D1}
-header a{color:#9DC7BA;font-size:.78rem;text-decoration:none;border-bottom:1px dotted #4A6B5E}
-header a:hover{color:#D9EDE5}
+/* Barra superior */
+.topbar{position:sticky;top:0;z-index:40;background:var(--tinta);color:#EAF1F7;box-shadow:0 6px 24px -14px rgba(0,0,0,.6)}
+.tb-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
+.logo{background:none;border:0;color:#fff;font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:-.03em;cursor:pointer;padding:2px 4px;display:flex;align-items:center;gap:8px}
+.logo em{font-style:normal;color:var(--brasa)}
+.logo .anv{width:30px;height:30px;border-radius:9px;background:var(--brasa);display:grid;place-items:center;color:#fff}
+.stepper{flex:1;display:flex;align-items:center;justify-content:center;min-width:0}
+.sdot{display:flex;align-items:center;gap:7px;background:none;border:0;color:#8FA7BE;font:600 13px var(--texto);padding:6px;cursor:pointer;border-radius:10px;white-space:nowrap}
+.sdot:disabled{cursor:not-allowed;opacity:.45}
+.sdot .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:2px solid #3E5C7D;font-size:12px;color:#A9C0D4;transition:all .2s}
+.sdot .n svg{width:14px;height:14px}
+.sdot[data-state="done"] .n{background:var(--forjado);border-color:var(--forjado);color:#fff}
+.sdot[data-state="now"]{color:#fff}
+.sdot[data-state="now"] .n{background:var(--brasa);border-color:var(--brasa);color:#fff;box-shadow:0 0 0 4px rgba(228,87,46,.25)}
+.sdot:not(:disabled):hover{background:rgba(255,255,255,.06)}
+.sline{flex:0 1 26px;height:2px;background:#2F4A68;min-width:6px}
+.sline.on{background:var(--forjado)}
+.tb-tools{display:flex;gap:6px}
+.tb-btn{background:transparent;border:1px solid #3E5C7D;color:#C9D8E6;border-radius:9px;padding:6px 10px;font:600 13px var(--texto);cursor:pointer;display:flex;align-items:center;gap:6px}
+.tb-btn:hover{border-color:var(--brasa);color:#fff}
+.progress{height:4px;background:#1E3550}
+.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brasa),#F59E0B);transition:width .4s}
+@media(max-width:960px){.sdot .lbl{display:none}.sdot[data-state="now"] .lbl{display:inline}}
+@media(max-width:720px){
+  .tb-in{flex-wrap:wrap;gap:8px}
+  .stepper{order:3;flex-basis:100%;justify-content:space-between}
+  .sdot[data-state="now"] .lbl{display:none}
+  .tb-btn .lbl{display:none}
+}
 
-/* tabs */
-nav.tabs{display:flex;gap:2px;padding:10px 18px 0;flex-wrap:wrap;max-width:1180px;margin:0 auto}
-nav.tabs button{font-family:var(--disp);font-size:.82rem;font-weight:600;padding:9px 14px;border:1px solid var(--line);border-bottom:none;background:#EBEFEC;color:var(--ink-soft);border-radius:var(--r) var(--r) 0 0;cursor:pointer}
-nav.tabs button.active{background:var(--card);color:var(--ink);border-color:var(--line);position:relative}
-nav.tabs button.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--card)}
-nav.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* Pantallas */
+main{max-width:1180px;margin:0 auto;padding:26px 16px 40px}
+.screen{display:none}
+.screen.on{display:block}
+@media(prefers-reduced-motion:no-preference){.screen.on{animation:rise .35s cubic-bezier(.2,.7,.3,1) both}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}}
+.sh{display:flex;gap:18px;align-items:flex-start;margin:4px 0 22px}
+.sh-ico{width:64px;height:64px;border-radius:18px;background:var(--c,var(--brasa));color:#fff;display:grid;place-items:center;flex:none;box-shadow:0 12px 24px -14px var(--c,var(--brasa))}
+.sh-ico svg{width:32px;height:32px}
+.sh-step{font:600 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--acero-claro);margin:4px 0}
+.sh h2{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.6vw,38px);letter-spacing:-.025em;line-height:1.05;margin:0 0 6px}
+.sh-lede{margin:0;color:var(--gris);font-size:16.5px;max-width:70ch}
+@media(max-width:600px){.sh-ico{width:48px;height:48px;border-radius:14px}.sh-ico svg{width:24px;height:24px}}
 
-main{max-width:1180px;margin:0 auto;padding:0 18px 60px}
-section.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:0 var(--r) var(--r) var(--r);padding:26px}
-section.panel.show{display:block;animation:fadeIn .18s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
-
-h2{font-family:var(--disp);font-size:1.15rem;margin-bottom:4px}
-h3{font-family:var(--disp);font-size:.95rem;margin:20px 0 8px}
-.sub{color:var(--ink-soft);font-size:.85rem;margin-bottom:18px}
-.hint{font-size:.78rem;color:var(--ink-soft);margin-top:4px}
-.card{border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:16px;background:#FCFDFC}
+.card{background:var(--blanco);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra);padding:20px;margin-bottom:18px}
+.card h3{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+.card h3 .num{width:26px;height:26px;border-radius:8px;background:var(--tinta);color:#fff;font:700 13px var(--mono);display:grid;place-items:center}
+.card .sub{margin:0 0 14px;color:var(--gris);font-size:14px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-@media(max-width:760px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+.cols{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:20px;align-items:start}
+.sticky{position:sticky;top:96px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}.sticky{position:static}}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
 
-label{display:block;font-size:.78rem;font-weight:600;margin-bottom:4px;color:var(--ink)}
-input[type=text],input[type=password],input[type=number],select,textarea{
-  width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-family:var(--body);font-size:.88rem;background:#fff;color:var(--ink)}
-textarea{font-family:var(--mono);font-size:.8rem;min-height:90px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.chk{display:flex;gap:8px;align-items:center;font-size:.82rem;font-weight:500}
-.chk input{width:auto}
+label,.lab{display:block;font-size:13.5px;font-weight:600;margin:0 0 6px;color:var(--acero)}
+label small,.lab small{font-weight:500;color:var(--acero-claro)}
+input[type=text],input[type=password],input[type=number],textarea,select{width:100%;padding:11px 13px;border:1.5px solid var(--linea);border-radius:10px;font-family:var(--texto);font-size:15px;color:var(--tinta);background:#fff;transition:border-color .15s,box-shadow .15s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--acero-claro);box-shadow:0 0 0 4px rgba(124,147,172,.18)}
+input.bad{border-color:var(--brasa);box-shadow:0 0 0 4px rgba(228,87,46,.15)}
+textarea{resize:vertical;min-height:96px;line-height:1.5}
+input::placeholder,textarea::placeholder{color:#9DB0C2}
+.field{margin-bottom:16px}
+.help{font-size:12.8px;color:var(--gris);margin:6px 0 0}
+.help b{color:var(--acero)}
 
-button.btn{font-family:var(--disp);font-weight:600;font-size:.85rem;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
-button.btn:hover{border-color:var(--accent);color:var(--accent)}
-button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button.btn.primary:hover{background:#0B6B58;color:#fff}
-button.btn.danger{background:var(--revert);border-color:var(--revert);color:#fff}
-button.btn.ghost{background:transparent}
-button.btn:disabled{opacity:.45;cursor:not-allowed}
-button.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.mini{font-size:.72rem;padding:4px 9px}
+button{font-family:var(--texto);cursor:pointer}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:11px;font-weight:600;font-size:15px;border:1.5px solid transparent;padding:11px 18px;transition:transform .08s,background .15s,border-color .15s;text-decoration:none;line-height:1.2}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--brasa);color:#fff;box-shadow:0 8px 18px -10px var(--brasa)}
+.btn-primary:hover{background:var(--brasa-osc)}
+.btn-big{font-size:17px;padding:14px 24px;border-radius:13px}
+.btn-dark{background:var(--tinta);color:#fff}
+.btn-dark:hover{background:#1c3656}
+.btn-ghost{background:#fff;border-color:var(--linea);color:var(--acero)}
+.btn-ghost:hover{border-color:var(--acero-claro);background:#F7FAFC}
+.btn-ok{background:var(--forjado);color:#fff}
+.btn-ok:hover{background:#0b6457}
+.btn-word{background:#2B579A;color:#fff}
+.btn-word:hover{background:#1e3f7a}
+.btn-sm{padding:7px 12px;font-size:13.5px;border-radius:9px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 
-.notice{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 12px;border-radius:0 8px 8px 0;font-size:.82rem;margin:10px 0}
-.notice.warn{border-color:var(--warn);background:var(--warn-soft)}
-.notice.bad{border-color:var(--revert);background:var(--revert-soft)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:#fff;border:1.5px solid var(--linea);border-radius:999px;padding:7px 13px;font-size:13.5px;color:var(--acero);cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1.25;text-align:left}
+.chip:hover{border-color:var(--brasa);color:var(--brasa)}
+.chip[aria-pressed="true"]{background:var(--tinta);border-color:var(--tinta);color:#fff}
+.chip.mini-ex{font-size:12.5px;padding:4px 10px;border-style:dashed}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1.5px solid var(--linea);background:#fff;border-radius:9px;padding:7px 11px;font-size:13.5px;font-weight:600;color:var(--acero)}
+.seg button:hover{border-color:var(--acero-claro)}
+.seg button[aria-pressed="true"]{background:var(--tinta);border-color:var(--tinta);color:#fff}
 
-/* dropzone */
-.drop{border:2px dashed var(--line);border-radius:var(--r);padding:34px;text-align:center;cursor:pointer;background:#FCFDFC}
-.drop.over{border-color:var(--accent);background:var(--accent-soft)}
-.drop .big{font-size:1.8rem}
-.preview{font-family:var(--mono);font-size:.74rem;background:#F2F5F3;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;max-height:150px;overflow:auto;margin-top:10px}
+.meto{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.meto button{text-align:left;background:#fff;border:1.5px solid var(--linea);border-radius:12px;padding:10px 12px;color:var(--tinta)}
+.meto button b{display:block;font-size:14px}
+.meto button span{display:block;font-size:12.3px;color:var(--gris);line-height:1.35;margin-top:2px}
+.meto button:hover{border-color:var(--acero-claro)}
+.meto button[aria-pressed="true"]{border-color:var(--tinta);box-shadow:0 0 0 2px var(--tinta);background:var(--papel)}
 
-/* rubric */
-.tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px}
-.tpls button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 6px;font-size:.75rem;cursor:pointer;font-family:var(--body)}
-.tpls button .em{font-size:1.2rem;display:block}
-.tpls button:hover,.tpls button.sel{border-color:var(--accent);background:var(--accent-soft)}
-.crit{display:grid;grid-template-columns:26px 1.1fr 2fr 96px 72px 30px;gap:8px;align-items:start;padding:8px 0;border-bottom:1px dashed var(--line)}
-.crit .cid{font-family:var(--mono);font-size:.75rem;padding-top:9px;color:var(--ink-soft)}
-@media(max-width:760px){.crit{grid-template-columns:1fr;gap:4px}}
-.wsum{font-family:var(--mono);font-weight:600}
-.wsum.ok{color:var(--accent)}.wsum.bad{color:var(--revert)}
-.eyebtn{background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;padding:6px;font-size:.85rem}
-.eyebtn.hid{background:var(--warn-soft);border-color:var(--warn)}
+.tip{display:flex;gap:12px;background:#FFF8E6;border:1px solid #F3DDA0;border-radius:12px;padding:13px 15px;font-size:14px;color:#6B4E00;margin-bottom:18px}
+.tip svg{width:22px;height:22px;color:#C98200;flex:none;margin-top:1px}
+.tip strong{color:#523B00}
+.aviso{background:var(--brasa-suave);border:1px solid #F3C7B5;border-radius:12px;padding:13px 15px;font-size:14px;color:var(--aviso);margin-bottom:16px}
+.okbox{background:var(--forjado-suave);border:1px solid #A9DCCF;border-radius:12px;padding:13px 15px;font-size:14px;color:#0B5A4E;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 
-/* gates signature element */
-.gates{display:inline-flex;gap:3px;font-family:var(--mono);font-size:.62rem}
-.gate{padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--ink-soft);background:#fff}
-.gate.pass{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
-.gate.fail{background:var(--revert-soft);border-color:var(--revert);color:var(--revert)}
-.gate.skip{opacity:.45}
+/* Inicio */
+.hero{background:var(--tinta);color:#EAF1F7;border-radius:22px;padding:40px 36px;position:relative;overflow:hidden;margin-bottom:26px;box-shadow:var(--sombra-alta)}
+.hero::before{content:"";position:absolute;right:-80px;top:-80px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(228,87,46,.55),transparent 65%)}
+.hero::after{content:"";position:absolute;left:30%;bottom:-140px;width:420px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(14,140,122,.35),transparent 65%)}
+.hero>*{position:relative;z-index:1}
+@media(max-width:600px){.hero{padding:28px 20px;border-radius:18px}}
+.eyebrow{font:600 11.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#8FA7BE;margin:0 0 14px}
+.hero h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,5.4vw,58px);line-height:.98;letter-spacing:-.035em;margin:0 0 16px;max-width:17ch}
+.hero h1 em{font-style:normal;color:var(--brasa)}
+.hero p.lede{max-width:62ch;font-size:18px;color:#C3D3E2;margin:0 0 24px}
+.hero .actions .btn-ghost{background:transparent;color:#fff;border-color:#4A6787}
+.hero .actions .btn-ghost:hover{border-color:#fff}
+.draft{margin-top:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14.5px}
+.sec-title{font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:-.02em;margin:34px 0 6px}
+.sec-sub{color:var(--gris);margin:0 0 16px}
+.journey{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.jstop{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:16px;position:relative}
+.jstop .ji{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;background:var(--c);margin-bottom:10px}
+.jstop .ji svg{width:20px;height:20px}
+.jstop b{display:block;font-size:15px;margin-bottom:2px}
+.jstop span{display:block;font-size:13px;color:var(--gris);line-height:1.45}
+.jstop .jn{position:absolute;top:12px;right:14px;font:700 12px var(--mono);color:var(--acero-claro)}
+@media(max-width:900px){.journey{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.journey{grid-template-columns:1fr}}
 
-/* experiments table */
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
-table.exp{width:100%;border-collapse:collapse;font-size:.76rem;min-width:840px}
-table.exp th{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:8px;background:#13201C;color:#C8D8D1;position:sticky;top:0}
-table.exp td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
-table.exp tr:nth-child(even) td{background:#FAFBFA}
-.badge{font-family:var(--mono);font-size:.64rem;padding:2px 7px;border-radius:20px;white-space:nowrap}
-.badge.keep{background:var(--accent-soft);color:var(--accent)}
-.badge.rev{background:var(--revert-soft);color:var(--revert)}
-.badge.blk{background:var(--warn-soft);color:var(--warn)}
-.badge.inv{background:#EEE;color:var(--ink-soft)}
-.mono{font-family:var(--mono)}
-.diffcell{max-width:280px}
-del{background:var(--revert-soft);text-decoration:line-through;color:var(--revert)}
-ins{background:var(--accent-soft);text-decoration:none;color:var(--accent)}
-details.dif summary{cursor:pointer;font-size:.72rem;color:var(--ink-soft)}
-details.dif pre{white-space:pre-wrap;font-size:.7rem;margin-top:4px}
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.part{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--linea);border-radius:12px;padding:12px 14px}
+.part .pi{width:34px;height:34px;border-radius:10px;background:color-mix(in srgb,var(--c) 14%,#fff);color:var(--c);display:grid;place-items:center;flex:none}
+.part b{display:block;font-size:14.5px}
+.part span{display:block;font-size:12.8px;color:var(--gris);line-height:1.4}
 
-/* log */
-#livelog{font-family:var(--mono);font-size:.72rem;background:#13201C;color:#C8D8D1;border-radius:8px;padding:12px;max-height:320px;overflow:auto;white-space:pre-wrap}
-#livelog .ok{color:#7BD4C0}#livelog .ko{color:#F0A08C}#livelog .wr{color:#E5C878}
-.statbar{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.78rem;margin:12px 0}
-.statbar b{font-size:1.05rem;display:block;color:var(--ink)}
-.statbar span{color:var(--ink-soft);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em}
-canvas.chart{width:100%;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.examples{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.excard{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--sombra);position:relative;overflow:hidden;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.excard:hover{transform:translateY(-3px);box-shadow:var(--sombra-alta)}
+.excard::before{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:var(--c)}
+.excard .emo{font-size:32px;line-height:1}
+.excard .area{font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--acero-claro)}
+.excard b{font-family:var(--display);font-size:18px;letter-spacing:-.01em;line-height:1.15}
+.excard p{margin:0;font-size:13.5px;color:var(--gris);flex:1}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);border-radius:999px;padding:3px 9px;align-self:flex-start}
 
-/* prompts */
-.agentbox{border:1px solid var(--line);border-radius:var(--r);margin-bottom:16px;overflow:hidden}
-.agentbox .ah{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F2F5F3;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.agentbox .ah b{font-family:var(--disp)}
-.agentbox .ab{padding:12px 14px}
-.vars{font-family:var(--mono);font-size:.68rem;color:var(--ink-soft);margin-bottom:8px}
-.jsonfix{font-family:var(--mono);font-size:.7rem;background:var(--warn-soft);border:1px dashed var(--warn);border-radius:6px;padding:8px;margin-top:8px}
+/* Clave */
+.keyrow{display:flex;gap:8px}
+.keyrow input{flex:1;font-family:var(--mono);font-size:14px}
+.eye{width:46px;flex:none;border:1.5px solid var(--linea);background:#fff;border-radius:10px;color:var(--acero);display:grid;place-items:center}
+.light{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:var(--papel);margin-top:14px;font-size:14.5px;font-weight:600}
+.light .bulbo{width:14px;height:14px;border-radius:50%;background:#B8C5D3;box-shadow:0 0 0 4px rgba(184,197,211,.3);flex:none}
+.light[data-s="ok"] .bulbo{background:#16A34A;box-shadow:0 0 0 4px rgba(22,163,74,.22)}
+.light[data-s="err"] .bulbo{background:var(--brasa);box-shadow:0 0 0 4px rgba(228,87,46,.22)}
+.light[data-s="wait"] .bulbo{background:#F59E0B;box-shadow:0 0 0 4px rgba(245,158,11,.25)}
+.olsteps{list-style:none;padding:0;margin:0;counter-reset:o;display:flex;flex-direction:column;gap:12px}
+.olsteps li{counter-increment:o;display:flex;gap:12px;font-size:14.5px;align-items:flex-start}
+.olsteps li::before{content:counter(o);width:28px;height:28px;border-radius:50%;background:var(--brasa-suave);color:var(--brasa);font:700 13px var(--mono);display:grid;place-items:center;flex:none}
 
-/* footer / misc */
-.stepnav{display:flex;justify-content:space-between;margin-top:22px}
-.pill{font-family:var(--mono);font-size:.68rem;background:#EEF2F0;border:1px solid var(--line);padding:2px 8px;border-radius:20px}
-.srcitem{border-bottom:1px dashed var(--line);padding:8px 0;font-size:.8rem}
-.srcitem a{color:var(--accent)}
-.leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:.72rem;color:var(--ink-soft);margin-top:8px}
-.leyenda span{display:flex;align-items:center;gap:5px}
-.leyenda i{width:11px;height:11px;border-radius:50%;display:inline-block}
-#chGraph{cursor:pointer;background:#fff}
-#nodedetail:empty{display:none}
-#restorebar{background:var(--warn-soft);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;margin:14px auto;max-width:1180px;display:none;align-items:center;gap:12px;font-size:.84rem}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* Acordeones */
+.acc{background:#fff;border:1px solid var(--linea);border-radius:var(--r);margin-bottom:12px;box-shadow:var(--sombra);overflow:hidden}
+.acc>summary{list-style:none;cursor:pointer;padding:15px 18px;display:flex;align-items:center;gap:12px}
+.acc>summary::-webkit-details-marker{display:none}
+.acc>summary .ai{width:36px;height:36px;border-radius:10px;background:var(--papel);color:var(--acero);display:grid;place-items:center;flex:none}
+.acc[open]>summary .ai{background:var(--tinta);color:#fff}
+.acc>summary b{font-family:var(--display);font-size:17px;display:block}
+.acc>summary small{display:block;color:var(--gris);font-size:13px}
+.acc>summary .chev{margin-left:auto;transition:transform .2s;color:var(--acero-claro)}
+.acc[open]>summary .chev{transform:rotate(180deg)}
+.acc .inner{padding:4px 18px 18px;border-top:1px solid var(--linea-2)}
+.acc .inner>*:first-child{margin-top:14px}
+.prompt-ta{font-family:var(--mono);font-size:12.3px;min-height:130px;background:#FBFDFE}
 
+/* Resumen lateral */
+.sum h3{margin-bottom:10px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.stat{background:var(--papel);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font:800 24px var(--display);letter-spacing:-.02em;line-height:1.1}
+.stat span{font-size:12.3px;color:var(--gris)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.checks li{display:flex;gap:9px;align-items:center;color:var(--gris)}
+.checks li .ck{width:20px;height:20px;border-radius:50%;border:2px solid var(--linea);display:grid;place-items:center;flex:none}
+.checks li.on{color:var(--tinta)}
+.checks li.on .ck{background:var(--forjado);border-color:var(--forjado);color:#fff}
+.checks li .ck svg{width:12px;height:12px}
+.docname{margin-top:14px;padding:11px 13px;border-radius:11px;background:var(--tinta);color:#C3D3E2;font-size:13.5px}
+.docname b{color:#fff}
+
+/* Generación */
+.agents{display:flex;flex-direction:column;gap:10px}
+.agent{background:#fff;border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra);overflow:hidden;transition:border-color .2s}
+.agent-h{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer}
+.agent .ai{width:42px;height:42px;border-radius:12px;background:color-mix(in srgb,var(--c) 14%,#fff);color:var(--c);display:grid;place-items:center;flex:none;transition:all .2s}
+.agent .ai svg{width:20px;height:20px}
+.agent-t{flex:1;min-width:0}
+.agent-t b{display:block;font-family:var(--display);font-size:16.5px}
+.agent-t span{display:block;font-size:13px;color:var(--gris)}
+.pill{font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:var(--linea-2);color:var(--gris);white-space:nowrap}
+.agent[data-s="run"]{border-color:#F59E0B}
+.agent[data-s="run"] .ai{background:var(--c);color:#fff;animation:pulse 1s infinite alternate}
+.agent[data-s="run"] .pill{background:#FFF1D6;color:#8A5A00}
+.agent[data-s="ok"] .ai{background:var(--c);color:#fff}
+.agent[data-s="ok"] .pill{background:var(--forjado-suave);color:var(--forjado)}
+.agent[data-s="err"]{border-color:var(--brasa)}
+.agent[data-s="err"] .pill{background:var(--brasa-suave);color:var(--brasa)}
+.agent-b{display:none;padding:4px 18px 16px 72px;font-size:14px;border-top:1px solid var(--linea-2);background:#FBFDFE}
+.agent.open .agent-b{display:block}
+@media(max-width:600px){.agent-b{padding-left:18px}}
+@keyframes pulse{from{transform:scale(1);box-shadow:0 0 0 0 rgba(228,87,46,.5)}to{transform:scale(1.06);box-shadow:0 0 0 10px rgba(228,87,46,0)}}
+.forging{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:14px;background:var(--tinta);color:#fff;margin-bottom:16px}
+.forging .spark{width:44px;height:44px;border-radius:12px;background:var(--brasa);display:grid;place-items:center;flex:none;animation:pulse 1s infinite alternate}
+.forging.done .spark{background:var(--forjado);animation:none}
+.forging.err .spark{animation:none}
+.forging b{font-family:var(--display);font-size:18px;display:block}
+.forging span{font-size:14px;color:#C3D3E2}
+.mini-list{margin:10px 0 0;padding:0;list-style:none}
+.mini-list li{padding:5px 0;border-bottom:1px solid var(--linea-2)}
+.mini-list li:last-child{border-bottom:0}
+.code{display:inline-block;font:700 11px var(--mono);border-radius:5px;padding:1px 6px;margin-right:6px;background:var(--linea-2);color:var(--acero)}
+
+/* Guía */
+.res-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.res-head h2{font-family:var(--display);font-weight:800;font-size:clamp(24px,3vw,32px);letter-spacing:-.02em;margin:0;flex:1;min-width:240px;line-height:1.1}
+.doc{background:#fff;border:1px solid var(--linea);border-radius:18px;box-shadow:var(--sombra-alta);padding:40px 44px;max-width:900px;margin:0 auto}
+@media(max-width:700px){.doc{padding:22px 16px}}
+.doc-h{border-bottom:3px solid var(--tinta);padding-bottom:18px;margin-bottom:26px}
+.doc-kind{font:600 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--brasa);margin:0 0 6px}
+.doc-h h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.4vw,36px);letter-spacing:-.025em;line-height:1.05;margin:0 0 12px}
+.meta{display:flex;flex-wrap:wrap;gap:6px}
+.meta span{font-size:12.8px;font-weight:600;background:var(--papel);color:var(--acero);border-radius:999px;padding:4px 11px}
+.dsec{margin-bottom:28px}
+.dsec h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01em;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.dsec h2 .num{width:28px;height:28px;border-radius:8px;background:var(--tinta);color:#fff;font:700 13px var(--mono);display:grid;place-items:center;flex:none}
+.dsec p{margin:0 0 10px;max-width:75ch}
+.sublab{font-size:13px;font-weight:700;color:var(--acero-claro);margin:14px 0 6px}
+.row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea-2);font-size:14.5px;align-items:flex-start}
+.row:last-child{border-bottom:0}
+.row .code{margin-top:2px;flex:none}
+.code.cg{background:#E6F0FA;color:var(--c-ctx)}
+.code.ce{background:#EEEAFB;color:var(--c-comp)}
+.code.bl{background:var(--forjado-suave);color:var(--forjado)}
+.code.tm{background:var(--tinta);color:#fff}
+.row .hrs{margin-left:auto;font-size:12.5px;color:var(--gris);white-space:nowrap}
+.blk{font-weight:700;margin:16px 0 4px;display:flex;gap:8px;align-items:baseline}
+.blk small{font-weight:500;color:var(--gris)}
+.tbl-wrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th{background:var(--tinta);color:#fff;text-align:left;padding:9px 11px;font-size:12.5px;font-weight:700}
+table.t td{padding:9px 11px;border-bottom:1px solid var(--linea-2);vertical-align:top}
+table.t tr:nth-child(even) td{background:#FAFCFE}
+.peso{font-weight:800;color:var(--brasa);white-space:nowrap}
+.note{margin-top:12px;padding:11px 14px;background:var(--papel);border-left:4px solid var(--forjado);border-radius:8px;font-size:14px}
+.demo-flag{background:#FFF8E6;border:1px solid #F3DDA0;color:#6B4E00;border-radius:12px;padding:11px 15px;font-size:14px;margin:0 auto 16px;max-width:900px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.demo-flag svg{color:#C98200}
+
+/* Navegación inferior */
+.bottomnav{position:fixed;left:0;right:0;bottom:0;z-index:35;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--linea)}
+.bn-in{max-width:1180px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.bn-hint{flex:1;text-align:center;font-size:14px;color:var(--gris)}
+.bn-hint b{color:var(--tinta)}
+@media(max-width:600px){.bn-hint{display:none}.bn-in{justify-content:space-between}}
+
+/* Modal */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(15,34,55,.55);display:none;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
+.modal.on{display:flex}
+.modal-box{background:#fff;border-radius:18px;max-width:760px;width:100%;box-shadow:var(--sombra-alta);overflow:hidden}
+.modal-head{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--tinta);color:#fff}
+.modal-head h2{font-family:var(--display);font-size:22px;margin:0;flex:1}
+.modal-head button{background:transparent;border:1px solid #4A6787;color:#fff;border-radius:9px;padding:6px 10px}
+.modal-body{padding:18px 20px 22px}
+.glos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.glos{grid-template-columns:1fr}}
+.glos div{background:var(--papel);border-radius:12px;padding:12px 14px}
+.glos b{display:block;font-family:var(--display);font-size:16px;margin-bottom:2px}
+.glos span{font-size:13.8px;color:var(--acero)}
+.hist{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--linea);border-radius:12px;margin-bottom:8px}
+.hist-t{flex:1;min-width:0;cursor:pointer}
+.hist-t b{display:block;font-size:15px}
+.hist-t span{font-size:12.8px;color:var(--gris)}
+.hist:hover{border-color:var(--acero-claro)}
+.iconbtn{width:34px;height:34px;border-radius:9px;border:1.5px solid var(--linea);background:#fff;color:var(--acero);display:grid;place-items:center;padding:0}
+.iconbtn:hover{border-color:var(--brasa);color:var(--brasa)}
+.empty{text-align:center;color:var(--gris);padding:30px 10px}
+
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--tinta);color:#fff;padding:11px 18px;border-radius:12px;font-size:14.5px;font-weight:600;opacity:0;pointer-events:none;transition:all .25s;z-index:70;max-width:90vw;text-align:center;box-shadow:var(--sombra-alta)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+footer{max-width:1180px;margin:0 auto;padding:0 16px 30px;font-size:13px;color:#6E8299}
+footer hr{border:0;border-top:1px solid var(--linea);margin:0 0 14px}
+
+@media print{
+  body{background:#fff;padding:0}
+  .topbar,.bottomnav,.res-head,.demo-flag,.okbox,footer,.toast,.modal{display:none!important}
+  main{padding:0;max-width:none}
+  .screen{display:none!important}
+  
+  .doc{box-shadow:none;border:0;padding:0;max-width:none}
+  .dsec{break-inside:avoid-page}
+  table.t th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+/* ══ v2 ══ */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:640px){.grid3{grid-template-columns:1fr}}
+.feats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:960px){.feats{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.feats{grid-template-columns:1fr}}
+.feat{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:16px;border-top:4px solid var(--c)}
+.feat .pi{width:38px;height:38px;border-radius:11px;background:color-mix(in srgb,var(--c) 14%,#fff);color:var(--c);display:grid;place-items:center;margin-bottom:10px}
+.feat b{display:block;font-family:var(--display);font-size:17px;margin-bottom:3px}
+.feat span{display:block;font-size:13.5px;color:var(--gris);line-height:1.45}
+.importbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--tinta);color:#EAF1F7;border-radius:var(--r);padding:14px 16px;margin-bottom:18px}
+.importbar .pi{width:40px;height:40px;border-radius:11px;background:var(--brasa);display:grid;place-items:center;flex:none}
+.importbar b{display:block;font-size:15px}
+.importbar span{display:block;font-size:13.3px;color:#A9C0D4}
+.importbar .btn-dark{background:#fff;color:var(--tinta)}
+.importbar .btn-dark:hover{background:#EAF1F7}
+.inacc{border-top:1px solid var(--linea-2);margin-top:4px;padding-top:12px}
+.inacc>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--acero)}
+.inacc>summary::-webkit-details-marker{display:none}
+.inacc>summary .chev{margin-left:auto;transition:transform .2s;color:var(--acero-claro)}
+.inacc[open]>summary .chev{transform:rotate(180deg)}
+.rec{display:inline-block;font:700 11px var(--texto);background:var(--forjado-suave);color:var(--forjado);border-radius:999px;padding:2px 8px;vertical-align:2px;margin-left:4px}
+.checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:560px){.checkgrid{grid-template-columns:1fr}}
+.checkgrid label{display:flex;gap:9px;align-items:center;margin:0;padding:9px 11px;border-radius:10px;background:var(--papel);font-weight:500;color:var(--tinta);cursor:pointer;font-size:14px}
+.checkgrid input{width:18px;height:18px;accent-color:var(--forjado);margin:0}
+.checkgrid label:has(input:checked){background:var(--forjado-suave)}
+.drop{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;border:2px dashed var(--linea);border-radius:14px;padding:24px;cursor:pointer;color:var(--acero);margin:0;font-weight:500}
+.drop svg{width:30px;height:30px;color:var(--brasa)}
+.drop b{font-size:15px;color:var(--tinta)}
+.drop span{font-size:13px;color:var(--gris)}
+.drop.over,.drop:hover{border-color:var(--brasa);background:var(--brasa-suave)}
+
+
+
+/* ══ AutoResearchGraph ══ */
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:10px}
+@media(max-width:760px){.presets{grid-template-columns:1fr}}
+.presets button{text-align:left;background:#fff;border:2px solid var(--linea);border-radius:16px;padding:14px 16px;box-shadow:var(--sombra)}
+.presets button[aria-pressed="true"]{border-color:var(--brasa);box-shadow:0 0 0 3px rgba(228,87,46,.18)}
+.presets b{display:block;font-family:var(--display);font-size:18px;margin-bottom:4px}.presets small{display:block;font-size:13px;color:var(--gris);line-height:1.45}
+.presets .pc{display:block;margin-top:8px;font:700 12px var(--mono);color:var(--acero-claro)}
+#tpls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:760px){#tpls{grid-template-columns:1fr 1fr}}
+#tpls button{background:#fff;border:1.5px solid var(--linea);border-radius:12px;padding:10px 12px;font-weight:700;font-size:13.5px;color:var(--acero);text-align:left;display:flex;gap:8px;align-items:center}
+#tpls button.sel{border-color:var(--brasa);background:var(--brasa-suave);color:var(--tinta)}
+#tpls .em{font-size:18px}
+.crit{display:grid;grid-template-columns:40px 1fr 2fr auto auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--linea-2)}
+@media(max-width:760px){.crit{grid-template-columns:40px 1fr;}}
+.crit .cid{font:800 12px var(--mono);color:var(--acero-claro)}
+.crit input{padding:8px 10px;border:1.5px solid var(--linea);border-radius:9px;font-size:14px;width:100%}
+.crit .row{display:flex;gap:4px;align-items:center;font-size:13px}
+.eyebtn{border:1.5px solid var(--linea);background:#fff;border-radius:9px;padding:6px 9px;font-size:12.5px;white-space:nowrap}
+.eyebtn.hid{background:#FFF1D6;border-color:#E9C46A;color:#6B4E00;font-weight:700}
+.wsum{font:800 14px var(--mono);border-radius:999px;padding:3px 12px}.wsum.ok{background:var(--forjado-suave);color:var(--forjado)}.wsum.bad{background:var(--brasa-suave);color:var(--brasa)}
+.notice{border-radius:12px;padding:10px 12px;background:var(--forjado-suave);font-size:14px;color:#0B4F43;margin:8px 0}
+.notice.bad{background:var(--brasa-suave);color:#7A2A12}.notice.warn{background:#FFF8E6;color:#6B4E00}
+.hint{font-size:12.8px;color:var(--gris)}.mono{font-family:var(--mono);font-size:12.5px}
+.statbar{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:8px 0}
+@media(max-width:760px){.statbar{grid-template-columns:1fr 1fr}}
+.statbar div{background:var(--papel);border-radius:12px;padding:10px 12px}.statbar b{display:block;font:800 22px var(--display)}.statbar span{font-size:12px;color:var(--gris)}
+.live{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:760px){.live{grid-template-columns:1fr 1fr}}
+.live div{background:var(--tinta);color:#fff;border-radius:12px;padding:10px 12px}.live b{display:block;font:800 22px var(--display)}.live span{font-size:12px;color:#A9C0D4}
+#livelog{background:#0B1C2E;color:#C3D3E2;font:12px/1.55 var(--mono);border-radius:12px;padding:10px 12px;max-height:280px;overflow:auto;white-space:pre-wrap}
+#livelog .ok{color:#7BE0B4}#livelog .ko{color:#FF9C80}#livelog .wr{color:#FFD27A}
+canvas{max-width:100%;height:auto;background:#fff;border-radius:12px;border:1px solid var(--linea-2)}
+.tablewrap{overflow:auto}
+table.exp{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+table.exp th{background:var(--tinta);color:#fff;text-align:left;padding:7px 8px;font-size:11.5px}table.exp td{padding:7px 8px;border-bottom:1px solid var(--linea-2);vertical-align:top}
+.badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.badge.keep{background:var(--forjado-suave);color:var(--forjado)}.badge.rev{background:var(--brasa-suave);color:var(--brasa)}.badge.blk{background:#FFF1D6;color:#8A5A00}.badge.inv{background:var(--linea-2);color:var(--gris)}
+.gates{display:flex;gap:4px;flex-wrap:wrap}.gate{font:700 11px var(--mono);border-radius:6px;padding:1px 6px}
+.gate.pass{background:var(--forjado-suave);color:var(--forjado)}.gate.fail{background:var(--brasa-suave);color:var(--brasa)}.gate.skip{background:var(--linea-2);color:var(--gris)}
+details.dif summary{cursor:pointer;font-size:12.5px;color:var(--acero-claro)}
+details.dif pre{white-space:pre-wrap;font-size:12px;background:var(--papel);border-radius:8px;padding:6px 8px;margin:4px 0}
+del{background:#FDE3DA;color:#7A2A12;text-decoration:line-through}ins{background:#DDF3EA;color:#0B4F43;text-decoration:none}
+.pill{font-size:11.5px;border-radius:999px;padding:2px 8px;background:var(--linea-2);color:var(--acero)}
+.srcitem{padding:6px 0;border-bottom:1px dashed var(--linea-2);font-size:13.5px}
+.leyenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px}.leyenda i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+.agentbox{border:1px solid var(--linea);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.agentbox .ah{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:var(--papel)}
+.agentbox .ab{padding:10px 14px}.agentbox textarea{width:100%;min-height:90px;font:12.5px var(--mono);padding:8px;border:1.5px solid var(--linea);border-radius:9px}
+.agentbox .vars,.agentbox .jsonfix{font:11.5px var(--mono);color:var(--gris);margin:4px 0}
+.btn.mini{padding:5px 10px;font-size:12.5px;border-radius:8px}
+#finaltext{white-space:pre-wrap;font-family:Georgia,serif;font-size:15px;line-height:1.65;background:#fff;border:1px solid var(--linea);border-radius:14px;padding:18px 22px;max-height:600px;overflow:auto}
+#docpreview{white-space:pre-wrap;font-size:13px;color:var(--acero);background:var(--papel);border-radius:10px;padding:10px 12px;margin-top:8px;max-height:160px;overflow:auto}
+.ejs{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:700px){.ejs{grid-template-columns:1fr}}
+.ejs button{text-align:left;background:var(--papel);border:1.5px solid transparent;border-radius:12px;padding:11px 13px}.ejs button:hover{border-color:var(--acero-claro)}
+.ejs b{display:block;font-size:14px}.ejs small{color:var(--gris);font-size:12.5px}
+
+/* ══ AntiConvocatorIA ══ */
+/* ocho pasos: solo se muestra la etiqueta del paso actual */
+.tb-tools{flex:none}
+.stepper{overflow:hidden}
+.sdot .lbl{display:none}.sdot[data-state="now"] .lbl{display:inline}
+.stepper{justify-content:center;min-width:0}
+@media(max-width:720px){.sdot[data-state="now"] .lbl{display:none}.sline{flex:1 1 4px;min-width:2px}.sdot{padding:4px 2px}.sdot .n{width:26px;height:26px}}
+
+:root{--teal:#0E7C6B;--sello:#E4572E}
+.idea{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:960px){.idea{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.idea{grid-template-columns:1fr}}
+.idea div{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:16px}
+.idea b{display:block;font-family:var(--display);font-size:17px;margin-bottom:4px}
+.idea span{font-size:13.8px;color:var(--gris);line-height:1.5;display:block}
+.idea .k{font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brasa);margin-bottom:8px}
+.idea div.yes{border-color:#A9DCCF;background:var(--forjado-suave)}
+.idea div.yes .k{color:var(--forjado)}
+.quote{margin:22px 0 0;font-family:var(--display);font-size:clamp(20px,2.6vw,28px);font-weight:700;letter-spacing:-.02em;color:#fff}
+.quote span{color:var(--brasa)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 16px}
+.metric{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px 16px;box-shadow:var(--sombra)}
+.metric-v{font:800 34px var(--display);letter-spacing:-.03em;line-height:1.05;color:var(--tinta)}
+.metric-v.good{color:var(--forjado)} .metric-v.warn{color:var(--brasa)} .metric-v.mid{color:#B7791F}
+.metric-l{font-weight:700;font-size:14px;margin-top:4px}
+.metric-n{font-size:12.8px;color:var(--gris);margin-top:4px;line-height:1.45}
+.substeps{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.substeps span{font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 11px;background:var(--linea-2);color:var(--gris)}
+.substeps span.on{background:#FFF1D6;color:#8A5A00}
+.substeps span.done{background:var(--forjado-suave);color:var(--forjado)}
+.substeps span.fail{background:var(--brasa-suave);color:var(--brasa)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.heat{border-collapse:separate;border-spacing:3px;font-size:13px;width:100%}
+.heat th{font-size:11.5px;color:var(--gris);font-weight:700;text-align:center;padding:4px;white-space:nowrap}
+.heat th.l,.heat td.l{text-align:left}
+.heat td{text-align:center;border-radius:6px;padding:7px 4px;min-width:34px}
+.heat td.l{padding:6px 8px 6px 0;min-width:170px;font-weight:600}
+.heat td.c0{background:#F3F6FA;color:#B8C5D3}
+.heat td.p{font-weight:800}
+.aband{display:flex;flex-direction:column;gap:6px}
+.aband-row{display:grid;grid-template-columns:minmax(140px,1.2fr) 2fr minmax(150px,1fr);gap:10px;align-items:center;font-size:13.5px}
+.aband-bar{height:10px;background:var(--linea-2);border-radius:6px;overflow:hidden}
+.aband-fill{height:100%;background:var(--brasa);border-radius:6px}
+.aband-n{color:var(--gris);font-size:12.5px}
+@media(max-width:600px){.aband-row{grid-template-columns:1fr}}
+.conv{background:#FBFDFE;border:1.5px solid var(--linea);border-radius:12px;margin-bottom:8px}
+.conv>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap}
+.conv>summary::-webkit-details-marker{display:none}
+.conv-year{font:700 13px var(--mono);background:var(--tinta);color:#fff;border-radius:7px;padding:3px 9px}
+.conv-meta{font-size:13px;color:var(--gris);flex:1}
+.conv-src{font-size:12px;color:var(--acero-claro);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv-body{padding:4px 12px 12px}
+.ing{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.ing div{display:flex;gap:10px;font-size:13px;justify-content:space-between;padding:6px 10px;background:var(--papel);border-radius:8px}
+.ing .ok{color:var(--forjado);font-weight:600}.ing .err{color:var(--brasa);font-weight:600}.ing .warn{color:#B7791F;font-weight:600}
+.bp-scroll{overflow-x:auto}
+table.bp{border-collapse:separate;border-spacing:3px;width:100%;font-size:13.5px}
+table.bp th{font-size:12px;color:var(--gris);font-weight:700;padding:4px;text-align:center;white-space:nowrap}
+table.bp th.l{text-align:left}
+table.bp td.tema{font-weight:600;padding-right:8px;min-width:180px}
+table.bp td.cell{padding:0;min-width:64px}
+.bp-in{position:relative;border-radius:8px;display:flex;align-items:center;justify-content:center;height:40px}
+.bp-in input{width:48px;border:0;background:transparent;text-align:center;font:700 14px var(--texto);color:var(--tinta);padding:6px 0}
+.bp-in input:focus{box-shadow:none;background:rgba(255,255,255,.7);border-radius:6px}
+.bp-in.dark input{color:#fff}
+.bp-in.sel{outline:2.5px solid var(--brasa);outline-offset:-2px}
+.bp-hits{position:absolute;top:-7px;right:-5px;background:var(--brasa);color:#fff;border-radius:999px;font:700 10.5px var(--texto);padding:1px 6px}
+.bp-peso{width:64px!important;padding:8px!important;text-align:center;font-weight:700}
+.deuda{display:inline-block;height:8px;border-radius:4px;background:var(--brasa);vertical-align:1px;margin-right:8px}
+.deuda-0{background:var(--linea)}
+.rowsum{font-size:11.5px;color:var(--gris);text-align:center}
+.rowsum.bad{color:var(--brasa);font-weight:700}
+.legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--gris);margin-top:10px}
+.legend-bar{width:90px;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(14,124,107,.05),rgba(14,124,107,.8))}
+.acta{background:var(--tinta);color:#EAF1F7;border-radius:18px;padding:22px;margin-bottom:16px;box-shadow:var(--sombra-alta);position:relative;overflow:hidden}
+.acta::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(228,87,46,.35),transparent 65%)}
+.acta>*{position:relative;z-index:1}
+.acta h3{font-family:var(--display);font-size:22px;margin:0}
+.acta .sub{font-size:13px;color:#A9C0D4;margin:2px 0 14px}
+.acta dl{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin:0;font-size:14px}
+.acta dt{color:#8FA7BE;font-weight:600}
+.acta dd{margin:0;word-break:break-all}
+.acta code{background:#1B3350;color:#9FE3D4;font-size:12.5px}
+@media(max-width:600px){.acta dl{grid-template-columns:1fr}}
+.intentos{margin-top:16px;display:flex;flex-direction:column;gap:6px}
+.intento{display:grid;grid-template-columns:78px 1fr 52px;gap:10px;align-items:center;font-size:12.5px}
+.intento .track{position:relative;height:10px;background:#1E3550;border-radius:6px}
+.intento .fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px}
+.intento .lim{position:absolute;top:-4px;bottom:-4px;width:2px;background:#F5BF4F}
+.intento .exp{position:absolute;top:-4px;bottom:-4px;width:2px;background:#8FA7BE}
+.intento .v{text-align:right;font-weight:700}
+.tagx{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--linea-2);color:var(--acero);margin:1px 2px}
+.tagx.t{background:var(--forjado-suave);color:var(--forjado)}
+.tagx.a{background:var(--brasa-suave);color:var(--brasa)}
+.paper{background:#fff;border:1px solid var(--linea);border-radius:18px;box-shadow:var(--sombra-alta);padding:34px 38px;max-width:880px;margin:0 auto}
+@media(max-width:700px){.paper{padding:20px 16px}}
+.paper-head{border-bottom:3px solid var(--tinta);padding-bottom:14px;margin-bottom:16px}
+.paper-head h3{font-family:var(--display);font-size:28px;margin:0 0 4px;letter-spacing:-.02em}
+.paper-head .pm{font-size:13.5px;color:var(--gris)}
+.q{padding:14px 0;border-bottom:1px solid var(--linea-2)}
+.q:last-child{border-bottom:0}
+.q-top{display:flex;gap:10px}
+.q-n{font:800 16px var(--display);flex:none;min-width:24px}
+.q-text{white-space:pre-wrap;flex:1}
+.q-pts{flex:none;font-size:12.5px;color:var(--gris);white-space:nowrap}
+.opts{margin:8px 0 0 34px;display:flex;flex-direction:column;gap:4px;font-size:14.5px}
+.opts .ok{color:var(--forjado);font-weight:700}
+.q-meta{margin:10px 0 0 34px}
+.variantes{margin:10px 0 0 34px;background:var(--papel);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.variantes .vt{font-weight:700;color:var(--acero);margin-bottom:4px;font-size:12.5px}
+.variantes .vi{padding:5px 0;border-top:1px dashed var(--linea)}
+.variantes .vi:first-of-type{border-top:0}
+.crit{margin:8px 0 0 34px;font-size:13.5px;border-left:3px solid var(--forjado);padding:6px 10px;background:var(--forjado-suave);border-radius:0 8px 8px 0}
+.carta{background:#fff;border:1px solid var(--linea);border-radius:18px;box-shadow:var(--sombra-alta);padding:34px 40px;max-width:760px;margin:0 auto;font-size:16.5px;line-height:1.65}
+.carta p{margin:0 0 14px}
+@media(max-width:700px){.carta{padding:22px 18px}}
+.pubbox{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;justify-content:center}
+.stale{background:#FFF8E6;border:1px solid #F3DDA0;color:#6B4E00;border-radius:12px;padding:11px 15px;font-size:14px;margin-bottom:14px}
+.verify-ok{background:var(--forjado-suave);color:#0B5A4E;border-radius:12px;padding:12px 14px;font-weight:600}
+.verify-ko{background:var(--brasa-suave);color:var(--aviso);border-radius:12px;padding:12px 14px;font-weight:600}
+.keyhide{font-family:var(--mono);letter-spacing:.1em}
+@media print{
+  .noprint,.acta .intentos{display:none!important}
+  .screen.on{display:block!important}
+  .paper,.carta{box-shadow:none;border:0;padding:0}
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">🕸 Auto<span>ResearchGraph</span></div>
-  <div class="ver">DAG de commits · loop auditable</div>
-  <div class="spacer"></div>
-  <div class="costlive" id="costlive">0 llamadas · 0 tokens · $0.0000</div>
-  <div class="keychip" id="keychip">Sin configurar</div>
-  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">🔑 Obtener API Key</a>
-  <a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">📚 karpathy/autoresearch</a>
-</header>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></symbol>
+  <symbol id="i-quiz" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 3v4M17 5h4M5 17v4M3 19h4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-form" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M6 14l1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></symbol>
+</svg>
 
-<div id="restorebar">
-  🕐 Hay una sesión guardada.
-  <button class="btn mini primary" id="btnRestore">Restaurar sesión</button>
-  <button class="btn mini ghost" id="btnDiscard">Descartar</button>
+<div class="topbar">
+  <div class="tb-in">
+    <button class="logo" id="goHome" type="button" aria-label="Ir al inicio"><span class="anv"><svg class="i"><use href="#i-refresh"/></svg></span><span>AutoResearch<em>Graph</em></span></button>
+    <nav class="stepper" id="stepper" aria-label="Pasos"></nav>
+    <div class="tb-tools"><span class="nivpill" id="costlive" style="font-size:12px;color:#C3D3E2">0 llamadas · $0.0000</span><button class="tb-btn" id="btnHelp" type="button"><svg class="i"><use href="#i-help"/></svg><span class="lbl">Ayuda</span></button></div>
+  </div>
+  <div class="progress"><span id="progBar"></span></div>
 </div>
+<nav id="tabs" hidden></nav><span id="keychip" hidden></span>
 
-<nav class="tabs" id="tabs">
-  <button data-t="config" class="active">⚙️ Configuración</button>
-  <button data-t="rubrica">📋 Rúbrica</button>
-  <button data-t="ejecutar">▶ Ejecutar</button>
-  <button data-t="grafo">🕸 Grafo</button>
-  <button data-t="resultados">📊 Resultados</button>
-  <button data-t="documento">📄 Documento final</button>
-  <button data-t="agentes">🤖 Agentes &amp; Prompts</button>
-  <button data-t="busquedas">🔍 Búsquedas</button>
-  <button data-t="meta">🧠 Meta</button>
-</nav>
-
-<main>
-<!-- ══════════ CONFIG ══════════ -->
-<section class="panel show" id="p-config">
-  <h2>Configuración</h2>
-  <p class="sub">Sube tu documento, configura el loop y las salvaguardas. Paso 1 de 3.</p>
-
-  <div class="card">
-    <h3 style="margin-top:0">🔑 OpenAI API Key <span class="pill">🔒 solo en tu navegador</span></h3>
-    <div class="row">
-      <input type="password" id="apikey" placeholder="sk-..." style="flex:1;min-width:220px" autocomplete="off">
-      <button class="btn mini" id="btnEye" aria-label="Mostrar u ocultar la key">👁</button>
-      <button class="btn mini" id="btnKeyDel" aria-label="Borrar la key">🗑</button>
+<main id="app">
+<!-- ═════ 0 · INICIO ═════ -->
+<section class="screen" data-step="0">
+  <div class="hero">
+    <p class="eyebrow">Mejora automática de documentos, con experimentos que se miden · Universidad Miguel Hernández de Elche</p>
+    <h1>Mejora tu documento <em>un cambio comprobado cada vez</em></h1>
+    <p class="lede">Una memoria, una propuesta, un informe o un artículo. Un evaluador de IA lo puntúa con tus criterios; otro agente propone un cambio pequeño; el cambio solo se queda si mejora de verdad y no estropea nada. Repite hasta llegar a tu objetivo, y cada intento, bueno o malo, queda registrado.</p>
+    <div class="actions">
+      <button class="btn btn-primary btn-big" id="btnGo" type="button"><svg class="i"><use href="#i-play"/></svg>Mejorar mi documento</button>
+      <button class="btn btn-ghost btn-big" id="btnDemo" type="button"><svg class="i"><use href="#i-eye"/></svg>Ver una mejora completa</button>
     </div>
-    <label class="chk" style="margin-top:8px"><input type="checkbox" id="keyPersist"> Guardar en localStorage (clave <code>ia_openai_key</code>, persiste entre sesiones)</label>
-    <p class="hint">✅ Las llamadas van directamente de tu navegador a api.openai.com. Nunca pasan por ningún servidor.</p>
+    <div class="draft" id="restorebar" style="display:none"><svg class="i"><use href="#i-save"/></svg><span style="flex:1">Tienes una sesión anterior guardada en este navegador.</span><button class="btn btn-primary btn-sm" id="btnRestore" type="button">Recuperarla</button><button class="btn btn-ghost btn-sm" id="btnDiscard" type="button">Descartar</button></div>
+    <p class="quote">Más largo no es mejor: <span>solo cuenta lo que mejora según tus criterios.</span></p>
   </div>
-
-  <div class="card">
-    <h3 style="margin-top:0">📁 Documento a mejorar</h3>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Subir documento">
-      <div class="big">📄</div>
-      <b>Arrastra tu documento aquí</b>
-      <div class="hint">O haz clic para seleccionar · .txt · .md · .docx · .pdf</div>
-      <input type="file" id="fileinput" accept=".txt,.md,.docx,.pdf" class="sr">
-    </div>
-    <div id="docinfo" class="hint"></div>
-    <div class="preview" id="docpreview" style="display:none"></div>
+  <h2 class="sec-title">Cómo decide si un cambio se queda</h2>
+  <div class="journey" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+    <div class="jstop" style="--c:#1F6FB2"><span class="jn">1</span><div class="ji"><svg class="i"><use href="#i-target"/></svg></div><b>Se mide</b><span>El evaluador puntúa cada criterio varias veces y se queda con la mediana, para no fiarse de una lectura.</span></div>
+    <div class="jstop" style="--c:#6B4FD8"><span class="jn">2</span><div class="ji"><svg class="i"><use href="#i-pencil"/></svg></div><b>Se propone</b><span>Otro agente cambia un fragmento concreto para mejorar el criterio más flojo. Nunca reescribe el documento entero.</span></div>
+    <div class="jstop" style="--c:#E4572E"><span class="jn">3</span><div class="ji"><svg class="i"><use href="#i-scale"/></svg></div><b>Tres filtros</b><span>Mejora lo suficiente, ningún criterio empeora y un juez que no sabe cuál es cuál prefiere la versión nueva.</span></div>
+    <div class="jstop" style="--c:#0E8C7A"><span class="jn">4</span><div class="ji"><svg class="i"><use href="#i-check"/></svg></div><b>Se queda o se deshace</b><span>Si falla un filtro, se deshace, pero se recuerda para no repetirlo. Todo forma un grafo de intentos.</span></div>
   </div>
-
-  <div class="card">
-    <h3 style="margin-top:0">🎯 Parámetros del loop</h3>
-    <div class="grid4">
-      <div><label for="pObjetivo">Score objetivo</label><input type="number" id="pObjetivo" min="1" max="10" step="0.1" value="8.5"><p class="hint">El loop para al alcanzarlo.</p></div>
-      <div><label for="pMaxIter">Iteraciones máx.</label><input type="number" id="pMaxIter" min="1" max="30" value="10"></div>
-      <div><label for="pMargen">Margen de aceptación Δ</label><input type="number" id="pMargen" min="0" max="2" step="0.05" value="0.15"><p class="hint">Mejoras menores se revierten: el ruido no es señal.</p></div>
-      <div><label for="pEpsilon">ε Pareto</label><input type="number" id="pEpsilon" min="0" max="2" step="0.05" value="0.3"><p class="hint">Caída máx. permitida por criterio.</p></div>
-      <div><label for="pK">K hipótesis por iteración</label><select id="pK"><option>1</option><option selected>2</option><option>3</option></select></div>
-      <div><label for="pN">Movimiento estructural cada N</label><input type="number" id="pN" min="0" max="15" value="5"><p class="hint">0 = desactivado.</p></div>
-      <div><label for="pM">Parada por estancamiento M</label><input type="number" id="pM" min="2" max="15" value="4"><p class="hint">Iteraciones seguidas sin conservar.</p></div>
-      <div><label for="pMed">Evaluaciones por mediana</label><select id="pMed"><option>1</option><option selected>3</option><option>5</option></select><p class="hint" id="medwarn"></p></div>
-      <div><label for="pModEval">Modelo Evaluador / Juez</label><select id="pModEval"><option value="gpt-4o">gpt-4o (juez fiable)</option><option value="gpt-6-luna">gpt-6-luna · más capaz y más barato (recomendado)</option><option value="gpt-4o-mini">gpt-4o-mini</option></select></div>
-      <div><label for="pModExp">Modelo Experimentador</label><select id="pModExp"><option value="gpt-6-luna" selected>gpt-6-luna · más capaz y más barato (recomendado)</option><option value="gpt-4o-mini">gpt-4o-mini</option><option value="gpt-4o">gpt-4o</option></select><p class="hint">Distinto del evaluador: rompe el sesgo de auto-preferencia.</p></div>
-      <div><label for="pFormato">Formato de descarga</label><select id="pFormato"><option value="md">Markdown (.md)</option><option value="txt">Texto plano (.txt)</option><option value="doc">Word (.doc)</option></select></div>
-    </div>
+  <h2 class="sec-title">Dos defensas contra las trampas</h2>
+  <div class="idea" style="grid-template-columns:1fr 1fr">
+    <div><p class="k">Criterios ocultos</p><b>Lo que el agente no ve</b><span>Hay criterios que el evaluador usa pero el agente que cambia el texto desconoce, como «sin relleno». Si la nota visible sube y la oculta baja, la app te avisa: el agente estaría complaciendo al evaluador, no mejorando el texto.</span></div>
+    <div><p class="k">Textos protegidos</p><b>Lo que no se puede tocar</b><span>Cifras, nombres o citas que eliges se comprueban con código tras cada cambio. Si alguno desaparece o cambia, el cambio se deshace sin gastar ni una consulta.</span></div>
   </div>
+</section>
 
-  <div class="card">
-    <h3 style="margin-top:0">🕸 Exploración del grafo (AgentHub: "traversar el grafo de búsqueda")</h3>
-    <p class="hint">Cada experimento es un nodo del DAG. En lugar de una cadena voraz, el loop puede ramificar desde distintos estados retenidos y mantener vivas varias líneas — los experimentos fallidos siguen siendo evidencia.</p>
-    <div class="grid2">
-      <div><label for="pStrategy">Estrategia de ramificación</label>
-        <select id="pStrategy">
-          <option value="greedy">⛰️ Voraz — siempre desde el mejor nodo (hill climbing)</option>
-          <option value="frontier" selected>🧭 Frontera — explora las hojas menos desarrolladas</option>
-          <option value="beam">🔦 Haz (beam) — rota entre los mejores N linajes</option>
-        </select>
-        <p class="hint">La frontera y el haz escapan mejor de óptimos locales; la voraz converge más rápido.</p></div>
-      <div id="pBeamWrap" style="display:none"><label for="pBeam">Anchura del haz (N linajes)</label><input type="number" id="pBeam" min="2" max="6" value="3"></div>
-    </div>
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="kgOn"> 🧠 Extraer grafo de conocimiento (world model) del documento y usarlo como grounding</label>
-    <p class="hint">Una llamada al inicio extrae entidades y afirmaciones con su nivel de apoyo. Se muestra en la pestaña Grafo y se inyecta al Experimentador para que priorice reforzar las afirmaciones sin evidencia. "El agente olvida; el grafo no."</p>
-  </div>
-
-  <div class="card">
-    <h3 style="margin-top:0">⛔ Restricciones — verificadas con código, no con promesas</h3>
-    <p class="hint">Cadenas, cifras, nombres o citas que el agente <b>nunca</b> puede alterar. Una por línea. Tras cada parche, JS comprueba que siguen presentes con el mismo número de ocurrencias; si no, revert automático sin gastar evaluación.</p>
-    <textarea id="restricciones" placeholder="Ej.:&#10;3.847 muestras&#10;Universidad Miguel Hernández&#10;p &lt; 0.05"></textarea>
-    <div class="row" style="margin-top:8px"><button class="btn mini" id="btnAutoRestr">🔍 Detectar automáticamente</button><span class="hint" id="restrinfo"></span></div>
-  </div>
-
-  <div class="card">
-    <h3 style="margin-top:0">🔍 Búsqueda web para enriquecer hipótesis</h3>
-    <label class="chk"><input type="checkbox" id="wsOn"> Activar búsqueda web en el loop</label>
-    <p class="hint">💡 El Experimentador recibe evidencia real (papers, normativa, ejemplos) antes de cada hipótesis. Las fuentes quedan registradas.</p>
-    <div id="wsopts" style="display:none;margin-top:10px">
-      <div class="grid3">
-        <div><label for="wsFuentes">Fuentes</label>
-          <select id="wsFuentes">
-            <option value="acad" selected>📚 Académico (gratis — CrossRef + PubMed + OpenAlex + Wikipedia)</option>
-            <option value="tavily">🌐 Web general (Tavily — requiere key)</option>
-            <option value="ambas">🔀 Ambas</option>
-          </select></div>
-        <div><label for="wsDepth">Profundidad de búsqueda</label>
-          <select id="wsDepth">
-            <option value="basica">⚡ Básica — 1 consulta · 2 fuentes</option>
-            <option value="estandar" selected>⚖️ Estándar — 1 consulta · 3 fuentes</option>
-            <option value="profunda">🔬 Profunda — 2 consultas · 5 fuentes · Tavily advanced + resumen</option>
-          </select>
-          <p class="hint">La profunda lanza una 2ª consulta sobre el tema global del documento y usa el modo <code>advanced</code> de Tavily con respuesta sintetizada.</p></div>
-        <div><label for="tavilykey">Tavily API Key</label>
-          <div class="row"><input type="password" id="tavilykey" placeholder="tvly-..." style="flex:1"><button class="btn mini" id="btnTavilyTest">Probar</button></div>
-          <label class="chk" style="margin-top:4px"><input type="checkbox" id="tavilyPersist"> Guardar en localStorage</label>
-        </div>
+<!-- ═════ 1 · DOCUMENTO ═════ -->
+<section class="screen" data-step="1">
+  <header class="sh" style="--c:#1F6FB2"><div class="sh-ico"><svg class="i"><use href="#i-doc"/></svg></div>
+    <div><p class="sh-step">Paso 1 de 4</p><h2>El documento</h2><p class="sh-lede">Carga el texto que quieres mejorar y marca lo que no se puede tocar. Se lee en tu navegador.</p></div></header>
+  <div class="cols">
+    <div>
+      <div class="card">
+        <h3><span class="num">1</span>Tu documento</h3>
+        <div class="drop" id="drop" tabindex="0" role="button"><svg class="i"><use href="#i-upload"/></svg><b>Arrastra aquí el documento o pulsa para elegirlo</b><span>Word, PDF, Markdown o texto</span><input type="file" id="fileinput" accept=".txt,.md,.docx,.pdf" hidden></div>
+        <details class="inacc" style="margin-top:10px"><summary><svg class="i"><use href="#i-pencil"/></svg><span>…o pega el texto</span><svg class="i chev"><use href="#i-down"/></svg></summary><textarea id="pegado" style="margin-top:10px;min-height:140px"></textarea><button class="btn btn-dark btn-sm" id="btnPegar" type="button" style="margin-top:8px">Usar este texto</button></details>
+        <p class="help" id="docinfo" style="margin:10px 0 0"></p><div id="docpreview" style="display:none"></div>
+        <p class="sublab">¿Sin documento a mano? Prueba con uno de estos</p>
+        <div class="ejs" id="ejs"></div>
       </div>
-      <p class="hint" id="wsstatus">Última búsqueda: —</p>
+      <div class="card">
+        <h3><span class="num">2</span>Lo que no se puede tocar <small style="font-weight:500;color:var(--gris)">(opcional)</small></h3>
+        <p class="sub">Una cadena por línea: cifras, nombres, fechas o citas que deben seguir exactamente igual. Tras cada cambio se comprueba con código que siguen ahí, las mismas veces.</p>
+        <textarea id="restricciones" style="min-height:100px;font-family:var(--mono);font-size:13px" placeholder="120.000 €&#10;Dra. Marta Ruiz&#10;36 meses"></textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="btnAutoRestr" type="button"><svg class="i"><use href="#i-sparkles"/></svg>Detectar cifras y nombres</button><span class="help" id="restrinfo" style="margin:0"></span></div>
+      </div>
     </div>
+    <aside class="card sticky">
+      <h3><svg class="i"><use href="#i-key"/></svg>Clave de OpenAI</h3>
+      <div class="keyrow"><input type="password" id="apikey" placeholder="sk-proj-…" autocomplete="off" spellcheck="false"><button class="eye" id="btnEye" type="button" aria-label="Mostrar u ocultar"><svg class="i"><use href="#i-eye"/></svg></button></div>
+      <div class="actions" style="margin-top:8px"><label style="display:flex;gap:6px;font-size:13px;margin:0"><input type="checkbox" id="keyPersist" checked> Recordarla en este navegador</label><button class="btn btn-ghost btn-sm" id="btnKeyDel" type="button"><svg class="i"><use href="#i-trash"/></svg>Borrar</button></div>
+      <p class="help">Las llamadas van directamente de tu navegador a OpenAI. Es la misma clave del resto de herramientas del catálogo.</p>
+    </aside>
   </div>
+</section>
 
+<!-- ═════ 2 · CRITERIOS ═════ -->
+<section class="screen" data-step="2">
+  <header class="sh" style="--c:#6B4FD8"><div class="sh-ico"><svg class="i"><use href="#i-scale"/></svg></div>
+    <div><p class="sh-step">Paso 2 de 4</p><h2>Qué significa «mejor»</h2><p class="sh-lede">La nota del documento sale de estos criterios. Elige el tipo de documento, pídeselos a la IA o sácalos de una convocatoria, y ajústalos.</p></div></header>
   <div class="card">
-    <h3 style="margin-top:0">💰 Estimación de coste</h3>
-    <div class="statbar">
-      <div><b id="estMin">$—</b><span>coste mínimo est.</span></div>
-      <div><b id="estMax">$—</b><span>coste máximo est.</span></div>
-      <div><b id="estCalls">—</b><span>llamadas / iteración</span></div>
-    </div>
-    <p class="hint">La v3 hace más llamadas por iteración (mediana×evaluaciones + K hipótesis + 3 juicios), pero el formato parche reduce ~70% los tokens de salida. El coste real depende del documento.</p>
+    <h3><span class="num">1</span>Tipo de documento</h3>
+    <div id="tpls"></div>
+    <div class="actions" style="margin-top:12px"><button class="btn btn-ghost btn-sm" id="btnSugerirIA" type="button">✨ Sugerir con IA a partir de mi documento</button></div>
+    <details class="inacc" style="margin-top:10px"><summary><svg class="i"><use href="#i-upload"/></svg><span>Sacar los criterios de una convocatoria o guía de evaluación</span><svg class="i chev"><use href="#i-down"/></svg></summary>
+      <div class="drop" id="dropRef" tabindex="0" role="button" style="margin-top:10px"><svg class="i"><use href="#i-upload"/></svg><b>Arrastra la convocatoria, la rúbrica del tribunal o la guía</b><span>No es el documento a mejorar: es el que dice qué es «bueno»</span><input type="file" id="fileRef" accept=".txt,.md,.docx,.pdf" hidden></div>
+      <p class="help" id="refinfo"></p></details>
   </div>
-
-  <div class="stepnav"><span></span><button class="btn primary" data-goto="rubrica">Siguiente: Rúbrica →</button></div>
-</section>
-
-<!-- ══════════ RÚBRICA ══════════ -->
-<section class="panel" id="p-rubrica">
-  <h2>Rúbrica</h2>
-  <p class="sub">Define la métrica. Los criterios 👁 ocultos los usa el Evaluador pero el Experimentador nunca los ve: son tu defensa anti-Goodhart. Paso 2 de 3.</p>
-
-  <div class="row" style="justify-content:space-between">
-    <b style="font-family:var(--disp)">⚡ Plantillas predefinidas</b>
-    <button class="btn mini" id="btnSugerirIA">✨ Sugerir con IA desde el documento a mejorar</button>
-  </div>
-  <div class="tpls" id="tpls"></div>
-
   <div class="card">
-    <h3 style="margin-top:0">📎 Generar rúbrica desde un documento de referencia</h3>
-    <p class="hint">Sube la convocatoria, la guía de evaluación del tribunal, una plantilla de criterios o cualquier documento que defina qué es "bueno". La IA extraerá de ahí los criterios y pesos. Es distinto del documento a mejorar.</p>
-    <div class="drop" id="dropRef" tabindex="0" role="button" aria-label="Subir documento de referencia" style="padding:20px">
-      <b>Arrastra aquí el documento de referencia</b>
-      <div class="hint">O haz clic · .txt · .md · .docx · .pdf</div>
-      <input type="file" id="fileRef" accept=".txt,.md,.docx,.pdf" class="sr">
+    <div class="actions" style="justify-content:space-between"><h3 style="margin:0"><span class="num">2</span>Criterios</h3><span><span class="wsum" id="wsum">0% / 100%</span> <button class="btn btn-ghost btn-sm" id="btnEquil" type="button">Repartir pesos</button> <button class="btn btn-ghost btn-sm" id="btnAddCrit" type="button"><svg class="i"><use href="#i-plus"/></svg>Añadir</button></span></div>
+    <div id="critlist" style="margin-top:8px"></div>
+    <div class="tip" style="margin-top:12px"><svg class="i"><use href="#i-bulb"/></svg><span>Usa de 3 a 6 criterios visibles, independientes entre sí, cuyos pesos sumen 100 %. El botón <b>👁</b> convierte un criterio en <b>oculto</b>: el evaluador lo puntúa, pero el agente que cambia el texto no lo ve. Sirve para detectar trampas; no suma a la nota.</span></div>
+  </div>
+</section>
+
+<!-- ═════ 3 · MEJORAR ═════ -->
+<section class="screen" data-step="3">
+  <header class="sh" style="--c:#E4572E"><div class="sh-ico"><svg class="i"><use href="#i-refresh"/></svg></div>
+    <div><p class="sh-step">Paso 3 de 4</p><h2>Mejorar</h2><p class="sh-lede">Elige cuánto quieres que trabaje, revisa el coste estimado y pulsa Empezar. Puedes detenerlo cuando quieras: se conserva la mejor versión.</p></div></header>
+  <div class="presets" id="presets"></div>
+  <div class="cols">
+    <div>
+      <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-sliders"/></svg></span><span><b>Ajustes avanzados</b><small>Los mismos parámetros del procedimiento original</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner">
+        <div class="grid3">
+          <div class="field"><label for="pObjetivo">Nota objetivo (sobre 10)</label><input type="number" id="pObjetivo" min="1" max="10" step="0.1" value="8.5"><p class="help">Se para al alcanzarla.</p></div>
+          <div class="field"><label for="pMaxIter">Rondas como máximo</label><input type="number" id="pMaxIter" min="1" max="30" value="8"></div>
+          <div class="field"><label for="pM">Parar tras N rondas sin avances</label><input type="number" id="pM" min="2" max="15" value="4"></div>
+          <div class="field"><label for="pMargen">Mejora mínima para quedarse</label><input type="number" id="pMargen" min="0" max="2" step="0.05" value="0.15"><p class="help">Por debajo es ruido, no mejora.</p></div>
+          <div class="field"><label for="pEpsilon">Caída máxima en un criterio</label><input type="number" id="pEpsilon" min="0" max="2" step="0.05" value="0.3"><p class="help">Ningún criterio puede empeorar más.</p></div>
+          <div class="field"><label for="pMed">Lecturas del evaluador</label><select id="pMed"><option>1</option><option selected>3</option><option>5</option></select><p class="help" id="medwarn"></p></div>
+          <div class="field"><label for="pK">Propuestas por ronda</label><select id="pK"><option>1</option><option selected>2</option><option>3</option></select></div>
+          <div class="field"><label for="pN">Cambio de estructura cada N rondas</label><input type="number" id="pN" min="0" max="15" value="4"><p class="help">0 = nunca.</p></div>
+          <div class="field"><label for="pStrategy">Desde qué versión se prueba</label><select id="pStrategy"><option value="greedy">Siempre desde la mejor (más rápido)</option><option value="frontier" selected>Desde las ramas menos exploradas</option><option value="beam">Rotando entre las N mejores</option></select></div>
+          <div class="field" id="pBeamWrap" style="display:none"><label for="pBeam">N mejores</label><input type="number" id="pBeam" min="2" max="6" value="3"></div>
+          <div class="field"><label for="pModEval">Modelo que evalúa</label><select id="pModEval"><option value="gpt-4o-mini" selected>gpt-4o-mini · económico (recomendado)</option><option value="gpt-4o">gpt-4o · más fiable, más caro</option><option value="gpt-6-luna">gpt-6-luna</option></select></div>
+          <div class="field"><label for="pModExp">Modelo que propone cambios</label><select id="pModExp"><option value="gpt-6-luna" selected>gpt-6-luna (recomendado)</option><option value="gpt-4o-mini">gpt-4o-mini</option><option value="gpt-4o">gpt-4o</option></select><p class="help">Mejor distinto del que evalúa: evita que se complazcan.</p></div>
+        </div>
+        <label style="display:flex;gap:8px;font-size:14px;margin:6px 0"><input type="checkbox" id="kgOn"> Extraer antes las afirmaciones del documento y priorizar las que no tienen apoyo</label>
+        <label style="display:flex;gap:8px;font-size:14px;margin:6px 0"><input type="checkbox" id="wsOn"> Buscar evidencia real (artículos, normativa) antes de cada propuesta</label>
+        <div id="wsopts" style="display:none;margin:8px 0 0 26px">
+          <div class="grid2"><div class="field"><label for="wsFuentes">Fuentes</label><select id="wsFuentes"><option value="acad" selected>Académicas, gratis (Crossref, PubMed, OpenAlex, Wikipedia)</option><option value="tavily">Web general (Tavily, requiere clave)</option><option value="ambas">Ambas</option></select></div><div class="field"><label for="wsDepth">Profundidad</label><select id="wsDepth"><option value="basica">Básica · 2 fuentes</option><option value="estandar" selected>Estándar · 3 fuentes</option><option value="profunda">Profunda · 5 fuentes</option></select></div></div>
+          <div class="field"><label for="tavilykey">Clave de Tavily <small>(solo para la web general)</small></label><div class="keyrow"><input type="password" id="tavilykey" placeholder="tvly-…"><button class="btn btn-ghost btn-sm" id="btnTavilyTest" type="button">Probar</button></div><label style="display:flex;gap:6px;font-size:12.5px;margin-top:6px"><input type="checkbox" id="tavilyPersist"> Recordarla</label></div>
+          <p class="help" id="wsstatus"></p>
+        </div>
+        <div class="field" style="margin:10px 0 0"><label for="pFormato">Formato de descarga</label><select id="pFormato"><option value="md">Markdown (.md)</option><option value="doc">Word (.doc)</option><option value="txt">Texto (.txt)</option></select></div>
+      </div></details>
+      <div class="live"><div><b id="stIter">—</b><span>ronda</span></div><div><b id="stScore">—</b><span>mejor nota</span></div><div><b id="stKeeps">—</b><span>cambios conservados</span></div><div><b id="stNodes">—</b><span>intentos</span></div><div><b id="stEff">—</b><span>mejora por dólar</span></div></div>
+      <div class="card"><h3><svg class="i"><use href="#i-target"/></svg>Evolución de la nota</h3><canvas id="chScore" width="900" height="240"></canvas><p class="help">Verde: nota con los criterios visibles. Ámbar: criterios ocultos. Si la verde sube y la ámbar baja, hay trampa.</p><div id="gamingalert"></div></div>
+      <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-grid"/></svg></span><span><b>Registro en directo</b><small>Cada propuesta, su nota y por qué se queda o se deshace</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><div id="livelog">Esperando…</div></div></details>
     </div>
-    <div id="refinfo" class="hint"></div>
+    <aside class="card sticky">
+      <h3><svg class="i"><use href="#i-play"/></svg>Antes de empezar</h3>
+      <div id="resumen" class="help" style="font-size:13px;line-height:1.6"></div>
+      <div id="validacion"></div>
+      <div class="metrics" style="grid-template-columns:1fr 1fr;margin:10px 0"><div class="metric"><div class="metric-v" id="estMin" style="font-size:22px">$—</div><div class="metric-l">coste mínimo</div></div><div class="metric"><div class="metric-v" id="estMax" style="font-size:22px">$—</div><div class="metric-l">coste máximo</div></div></div>
+      <p class="help" style="margin-top:0"><span id="estCalls">—</span> consultas por ronda. Estimación orientativa.</p>
+      <div class="actions"><button class="btn btn-primary" id="btnStart" type="button"><svg class="i"><use href="#i-play"/></svg>Empezar</button><button class="btn btn-ghost" id="btnStop" type="button" disabled>Detener</button></div>
+    </aside>
   </div>
+</section>
 
-  <div class="row" style="justify-content:space-between;margin-bottom:6px">
-    <h3 style="margin:0">📐 Criterios de evaluación</h3>
-    <div class="row">
-      <span class="wsum" id="wsum">0% / 100%</span>
-      <button class="btn mini" id="btnEquil">⚖️ Equilibrar pesos</button>
-      <button class="btn mini" id="btnAddCrit">+ Añadir criterio</button>
+<!-- ═════ 4 · RESULTADO ═════ -->
+<section class="screen" data-step="4">
+  <header class="sh" style="--c:#0E8C7A"><div class="sh-ico"><svg class="i"><use href="#i-check"/></svg></div>
+    <div><p class="sh-step">Paso 4 de 4</p><h2>El resultado</h2><p class="sh-lede">La mejor versión, los cambios que la han producido uno a uno y cómo ha variado cada criterio. Revísalo antes de usarlo: la IA puede equivocarse.</p></div></header>
+  <div class="cols">
+    <div>
+      <div class="card"><div class="actions" style="justify-content:space-between"><h3 style="margin:0"><svg class="i"><use href="#i-doc"/></svg>Documento mejorado</h3><button class="btn btn-primary btn-sm" id="btnDownload" type="button" disabled><svg class="i"><use href="#i-download"/></svg>Descargar</button></div><p class="help" id="docstats"></p><div id="finaltext" style="display:none"></div></div>
+      <div class="card"><h3><svg class="i"><use href="#i-check"/></svg>Cambios que se han quedado</h3><div id="finaldiff"><p class="hint">Aparecerán al terminar.</p></div></div>
     </div>
+    <aside class="card sticky"><h3><svg class="i"><use href="#i-scale"/></svg>Criterio por criterio</h3><div id="critcompare"><p class="hint">Pendiente.</p></div></aside>
   </div>
-  <div id="critlist"></div>
-  <p class="hint" style="margin-top:8px">💡 Cada criterio debe ser <b>independiente</b> y <b>evaluable objetivamente</b>. Usa 3–6 visibles. Si mejorar C1 mejora automáticamente C2, son el mismo criterio. Los pesos de los criterios <b>visibles</b> suman 100% y forman el score objetivo; los ocultos se puntúan aparte y protegen vía puerta Pareto y alerta de gaming.</p>
-
-  <div class="stepnav"><button class="btn" data-goto="config">← Configuración</button><button class="btn primary" data-goto="ejecutar">Siguiente: Ejecutar →</button></div>
-</section>
-
-<!-- ══════════ EJECUTAR ══════════ -->
-<section class="panel" id="p-ejecutar">
-  <h2>Ejecutar loop</h2>
-  <p class="sub">El humano sale del bucle aquí. Paso 3 de 3.</p>
-  <div class="card"><h3 style="margin-top:0">📋 Resumen de configuración</h3><div id="resumen" class="mono" style="font-size:.78rem;line-height:1.8"></div></div>
-  <div id="validacion"></div>
-  <div class="row">
-    <button class="btn primary" id="btnStart">▶ Iniciar mejora automática</button>
-    <button class="btn danger" id="btnStop" disabled>⏹ Detener</button>
-  </div>
-  <div class="statbar">
-    <div><b id="stIter">—</b><span>iteración</span></div>
-    <div><b id="stScore">—</b><span>mejor score</span></div>
-    <div><b id="stKeeps">—</b><span>conservados</span></div>
-    <div><b id="stNodes">—</b><span>nodos del grafo</span></div>
-    <div><b id="stEff">—</b><span>Δscore / $</span></div>
-  </div>
-  <details open><summary style="cursor:pointer;font-size:.8rem">▼ Log en vivo</summary><div id="livelog" role="log" aria-live="polite">Esperando ejecución…</div></details>
-</section>
-
-<!-- ══════════ GRAFO ══════════ -->
-<section class="panel" id="p-grafo">
-  <h2>Grafo de experimentos</h2>
-  <p class="sub">El DAG es el grafo (AgentHub). Los commits son nodos; los enlaces padre→hijo, aristas. El linaje ganador va resaltado en verde; los nodos rojos son experimentos revertidos que se conservan como evidencia. Haz clic en un nodo para ver su hipótesis y su diff.</p>
-  <div class="tablewrap" style="padding:8px"><canvas id="chGraph" width="1080" height="240" style="width:100%"></canvas></div>
-  <div id="nodedetail"></div>
-  <h3>Operaciones sobre el grafo</h3>
-  <div id="graphops"><p class="hint">Sin grafo todavía.</p></div>
-  <h3>🧠 Grafo de conocimiento (world model)</h3>
-  <div id="kgout"><p class="hint">🕸 Actívalo en Configuración para extraer entidades y afirmaciones del documento.</p></div>
-</section>
-
-<!-- ══════════ RESULTADOS ══════════ -->
-<section class="panel" id="p-resultados">
-  <h2>Resultados</h2>
-  <p class="sub">El registro completo de experimentos: hipótesis, puertas y decisiones.</p>
-  <div id="gamingalert"></div>
-  <div class="grid2">
-    <div><h3>Evolución del score (visible vs oculto)</h3><canvas class="chart" id="chScore" width="560" height="260"></canvas></div>
-    <div><h3>Eficiencia Δscore acumulado / $</h3><canvas class="chart" id="chEff" width="560" height="260"></canvas></div>
-  </div>
-  <h3>Scores por criterio: inicial vs final</h3>
-  <div id="critcompare"></div>
-  <h3>🧪 Tabla de experimentos</h3>
-  <div class="tablewrap"><table class="exp" id="exptable">
-    <thead><tr><th>#</th><th>Tipo</th><th>Hipótesis</th><th>Diff</th><th>Score antes→después</th><th>Rango juez</th><th>Puertas</th><th>Resultado</th><th>Fuentes</th></tr></thead>
-    <tbody id="expbody"><tr><td colspan="9" style="text-align:center;color:var(--ink-soft)">📊 Los resultados aparecerán aquí tras ejecutar el loop.</td></tr></tbody>
-  </table></div>
-</section>
-
-<!-- ══════════ DOCUMENTO ══════════ -->
-<section class="panel" id="p-documento">
-  <h2>Documento final</h2>
-  <p class="sub">Documento mejorado y diff acumulado respecto al original.</p>
-  <div class="row">
-    <button class="btn primary" id="btnDownload" disabled>⬇ Descargar documento</button>
-    <span class="hint" id="docstats"></span>
-  </div>
-  <h3>Cambios conservados (diff auditable)</h3>
-  <div id="finaldiff"><p class="hint">📄 Aparecerá aquí una vez completado el loop.</p></div>
-  <h3>Texto final</h3>
-  <div class="preview" id="finaltext" style="max-height:420px;display:none"></div>
-</section>
-
-<!-- ══════════ AGENTES ══════════ -->
-<section class="panel" id="p-agentes">
-  <h2>Agentes &amp; Prompts</h2>
-  <p class="sub">🤖 Estos son los prompts exactos que reciben los agentes. Edítalos antes de la ejecución; los cambios se aplican en el siguiente loop. Usa <code>{VARIABLE}</code> para las variables dinámicas.</p>
-  <div id="agentboxes"></div>
-  <div class="row"><button class="btn primary" id="btnSavePrompts">💾 Guardar cambios</button><button class="btn" id="btnResetAll">↺ Restaurar todo</button><button class="btn" data-goto="ejecutar">▶ Ir a ejecutar →</button></div>
-</section>
-
-<!-- ══════════ BÚSQUEDAS ══════════ -->
-<section class="panel" id="p-busquedas">
-  <h2>Búsquedas</h2>
-  <p class="sub">Evidencia externa usada por el Experimentador durante el loop.</p>
-  <div id="searchlist"><p class="hint">🔍 Las búsquedas realizadas durante el loop aparecerán aquí.</p></div>
-</section>
-
-<!-- ══════════ META ══════════ -->
-<section class="panel" id="p-meta">
-  <h2>Meta-mejora del proceso</h2>
-  <p class="sub">El equivalente a editar <code>program.md</code>: el Meta-analista lee la tabla de experimentos y propone cambios al Skill AutoImprove. Tú apruebas o rechazas cada uno. El humano sale del loop del documento, pero se queda en el loop del proceso.</p>
-  <button class="btn primary" id="btnMeta" disabled>🧠 Analizar ejecución</button>
-  <div id="metaout" style="margin-top:16px"></div>
+  <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-grid"/></svg></span><span><b>Todos los intentos</b><small>Hipótesis, cambio, nota antes y después, filtros y decisión</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><div class="tablewrap"><table class="exp"><thead><tr><th>#</th><th>Tipo</th><th>Hipótesis</th><th>Cambio</th><th>Nota</th><th>Dispersión</th><th>Filtros</th><th>Decisión</th><th>Fuentes</th></tr></thead><tbody id="expbody"></tbody></table></div><p class="help">Filtros: <b>Δ</b> mejora mínima · <b>pareto</b> ningún criterio empeora · <b>pares</b> votos del juez ciego (hacen falta 2 de 3).</p></div></details>
+  <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-refresh"/></svg></span><span><b>Grafo de intentos</b><small>Cada intento es un nodo; haz clic en uno para ver su cambio</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><div id="graphops"></div><canvas id="chGraph" width="1000" height="420"></canvas><div id="nodedetail"></div><h4>Mejora por dólar gastado</h4><canvas id="chEff" width="900" height="200"></canvas><h4>Afirmaciones del documento</h4><div id="kgout"></div></div></details>
+  <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-book"/></svg></span><span><b>Búsquedas de evidencia</b><small>Fuentes consultadas en cada ronda</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><div id="searchlist"></div></div></details>
+  <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-sparkles"/></svg></span><span><b>Aprender de esta ejecución</b><small>Un analista revisa los intentos y propone mejorar las instrucciones para la próxima vez</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><button class="btn btn-dark btn-sm" id="btnMeta" type="button" disabled>🧠 Analizar la ejecución</button><div id="metaout" style="margin-top:10px"></div></div></details>
+  <details class="acc"><summary><span class="ai"><svg class="i"><use href="#i-cpu"/></svg></span><span><b>Agentes e instrucciones</b><small>Los prompts exactos que reciben; editables</small></span><svg class="i chev"><use href="#i-down"/></svg></summary><div class="inner"><div class="actions" style="margin-bottom:10px"><button class="btn btn-dark btn-sm" id="btnSavePrompts" type="button">Guardar cambios</button><button class="btn btn-ghost btn-sm" id="btnResetAll" type="button">Restaurar todo</button></div><div id="agentboxes"></div></div></details>
 </section>
 </main>
 
+<footer><hr><p>AutoResearchGraph · Fernando Borrás Rocher · Universidad Miguel Hernández de Elche. Inspirada en <i>autoresearch</i> de Andrej Karpathy y en la idea de AgentHub de tratar los experimentos como un grafo. El documento se procesa en tu navegador y solo viaja a OpenAI (y a los buscadores académicos, si activas la búsqueda). La nota es una medida de la IA con tus criterios, no un juicio definitivo.</p></footer>
+
+<div class="bottomnav"><div class="bn-in">
+  <button class="btn btn-ghost" id="navBack" type="button"><svg class="i"><use href="#i-left"/></svg>Atrás</button>
+  <div class="bn-hint" id="navHint"></div>
+  <button class="btn btn-primary" id="navNext" type="button"><span id="navNextTxt">Siguiente</span><svg class="i"><use href="#i-right"/></svg></button>
+</div></div>
+<div class="modal" id="mHelp" role="dialog" aria-modal="true" aria-labelledby="mHelpT"><div class="modal-box"><div class="modal-head"><h2 id="mHelpT">Ayuda</h2><button type="button" data-close>Cerrar</button></div><div class="modal-body"><div class="glos" id="glos"></div></div></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
+
 'use strict';
 /* ══════════════ AutoResearch v3 — motor ══════════════ */
 const $ = id => document.getElementById(id);
-const PRICES = { 'gpt-6-luna': { in: 0.1, out: 0.5 }, 'gpt-4o-mini': { in: 0.15, out: 0.60 }, 'gpt-4o': { in: 2.50, out: 10.00 } }; // $/M tokens
+const PRICES = { 'gpt-6-luna': { in: 0.1, out: 0.5 }, 'gpt-4.1-mini': { in: 0.4, out: 1.6 }, 'gpt-4o-mini': { in: 0.15, out: 0.60 }, 'gpt-4o': { in: 2.50, out: 10.00 } }; // $/M tokens
 const LS = { key: 'ia_openai_key', tavily: 'ia_tavily_key', session: 'autoresearch_v3_session', prompts: 'autoresearch_v3_prompts' };
 
 const S = {
@@ -1002,7 +1344,7 @@ function showTab(t) {
   if (t === 'resultados') { renderCharts(); }
 }
 function renderCost() {
-  $('costlive').textContent = S.cost.calls + ' llamadas · ' + (S.cost.tin + S.cost.tout).toLocaleString() + ' tokens · $' + S.cost.usd.toFixed(4);
+  $('costlive').textContent = S.cost.calls + ' llamadas · ' + (S.cost.tin + S.cost.tout).toLocaleString('es') + ' tokens · $' + S.cost.usd.toFixed(4);
 }
 function estimar() {
   const med = parseInt($('pMed').value, 10), K = parseInt($('pK').value, 10), it = parseInt($('pMaxIter').value, 10);
@@ -1020,30 +1362,30 @@ function estimar() {
 }
 function validar() {
   const errs = [];
-  if (!$('apikey').value.trim()) errs.push('Falta la API key de OpenAI.');
-  if (!S.doc) errs.push('No hay documento cargado.');
+  if (!$('apikey').value.trim()) errs.push('Falta la clave de OpenAI (paso 1).');
+  if (!S.doc) errs.push('No hay documento (paso 1).');
   const w = S.rubric.filter(c => !c.oculto).reduce((a, c) => a + (+c.peso || 0), 0);
-  if (!S.rubric.filter(c => !c.oculto).length) errs.push('La rúbrica no tiene criterios visibles.');
-  else if (w !== 100) errs.push('Los pesos visibles suman ' + w + '% (deben sumar 100%).');
-  if ($('wsOn').checked && ($('wsFuentes').value !== 'acad') && !$('tavilykey').value.trim()) errs.push('Búsqueda Tavily activada sin key.');
+  if (!S.rubric.filter(c => !c.oculto).length) errs.push('No hay criterios visibles (paso 2).');
+  else if (w !== 100) errs.push('Los pesos de los criterios suman ' + w + ' % y deben sumar 100 % (paso 2).');
+  if ($('wsOn').checked && ($('wsFuentes').value !== 'acad') && !$('tavilykey').value.trim()) errs.push('La búsqueda web general necesita la clave de Tavily.');
   return { ok: !errs.length, errs };
 }
 function renderValidacion(v) {
-  $('validacion').innerHTML = v.ok ? '<div class="notice">✅ Listo para iniciar.</div>'
-    : '<div class="notice bad"><b>Antes de ejecutar:</b><br>' + v.errs.map(e => '• ' + e).join('<br>') + '</div>';
+  $('validacion').innerHTML = v.ok ? '<div class="notice">Todo listo para empezar.</div>'
+    : '<div class="notice bad"><b>Antes de empezar:</b><br>' + v.errs.map(e => '• ' + e).join('<br>') + '</div>';
   $('btnStart').disabled = !v.ok || S.running;
 }
 function renderResumen() {
   const vis = S.rubric.filter(c => !c.oculto).length, hid = S.rubric.length - vis;
   $('resumen').innerHTML = [
-    ['Documento', S.doc ? S.doc.name + ' (' + S.doc.text.length.toLocaleString() + ' caracteres)' : '—'],
-    ['Rúbrica', vis + ' criterios visibles + ' + hid + ' ocultos'],
-    ['Objetivo / iteraciones', $('pObjetivo').value + '/10 · máx. ' + $('pMaxIter').value],
-    ['Aceptación', 'Δ≥' + $('pMargen').value + ' · Pareto ε=' + $('pEpsilon').value + ' · pares 2/3'],
-    ['Exploración', 'K=' + $('pK').value + ' hipótesis · estructural cada ' + $('pN').value + ' · estancamiento M=' + $('pM').value],
-    ['Evaluación', 'mediana de ' + $('pMed').value + ' · evaluador ' + $('pModEval').value + ' · experimentador ' + $('pModExp').value],
-    ['Restricciones', getRestricciones().length + ' cadenas protegidas (verificación por código)'],
-    ['Búsqueda web', $('wsOn').checked ? $('wsFuentes').selectedOptions[0].text + ' · profundidad ' + $('wsDepth').value : 'desactivada']
+    ['Documento', S.doc ? S.doc.name + ' (' + S.doc.text.length.toLocaleString('es') + ' caracteres)' : '—'],
+    ['Criterios', vis + ' visibles y ' + hid + ' oculto(s)'],
+    ['Objetivo', $('pObjetivo').value + '/10 · como máximo ' + $('pMaxIter').value + ' rondas'],
+    ['Para quedarse', 'mejora de ' + $('pMargen').value + ' o más, ningún criterio cae más de ' + $('pEpsilon').value + ' y 2 de 3 votos del juez'],
+    ['Cada ronda', $('pK').value + ' propuesta(s)' + (+$('pN').value ? ' · cambio de estructura cada ' + $('pN').value : '') + ' · para tras ' + $('pM').value + ' rondas sin avance'],
+    ['Modelos', 'evalúa ' + $('pModEval').value + ' (' + $('pMed').value + ' lecturas) · propone ' + $('pModExp').value],
+    ['Protegido', getRestricciones().length + ' texto(s) que no se pueden tocar'],
+    ['Búsqueda de evidencia', $('wsOn').checked ? $('wsFuentes').selectedOptions[0].text : 'no']
   ].map(r => '<b>' + r[0] + ':</b> ' + r[1]).join('<br>');
 }
 
@@ -1093,8 +1435,8 @@ function equilibrar() {
   renderRubric();
 }
 async function sugerirIA() {
-  if (!S.doc) { alert('Sube primero un documento.'); return; }
-  if (!$('apikey').value.trim()) { alert('Configura la API key.'); return; }
+  if (!S.doc) { toast('Sube primero un documento.'); return; }
+  if (!$('apikey').value.trim()) { toast('Configura la API key.'); return; }
   $('btnSugerirIA').disabled = true; $('btnSugerirIA').textContent = '✨ Analizando…';
   try {
     const r = await callAI($('pModEval').value,
@@ -1106,17 +1448,17 @@ async function sugerirIA() {
       S.rubric.push(Object.assign({}, HIDDEN_ANTIGAMING));
       S.tplSel = 'custom'; renderTpls(); renderRubric();
     }
-  } catch (e) { alert('Error: ' + e.message); }
+  } catch (e) { toast('Error: ' + e.message); }
   $('btnSugerirIA').disabled = false; $('btnSugerirIA').textContent = '✨ Sugerir con IA';
 }
 function autoDetectRestr() {
-  if (!S.doc) { alert('Sube primero un documento.'); return; }
+  if (!S.doc) { toast('Sube primero un documento.'); return; }
   const t = S.doc.text, out = new Set();
   (t.match(/\d[\d.,]*\s?%?/g) || []).filter(x => x.replace(/\D/g, '').length >= 2).slice(0, 25).forEach(x => out.add(x.trim()));
   (t.match(/[«"“]([^»"”]{4,90})[»"”]/g) || []).slice(0, 10).forEach(x => out.add(x));
   (t.match(/\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)+\b/g) || []).slice(0, 15).forEach(x => out.add(x));
   $('restricciones').value = [...out].slice(0, 40).join('\n');
-  $('restrinfo').textContent = out.size + ' cadenas detectadas — revisa y borra las que no sean críticas.';
+  $('restrinfo').textContent = out.size + ' textos detectados. Borra los que no importen.';
 }
 
 /* ══════════════ Render: tabla, diff, gráficas ══════════════ */
@@ -1132,8 +1474,8 @@ function diffHTML(parches) {
     parches.map(p => '<pre><del>' + esc(String(p.buscar).slice(0, 220)) + '</del>\n<ins>' + esc(String(p.reemplazar).slice(0, 220)) + '</ins></pre>').join('') + '</details>';
 }
 function renderExpTable() {
-  const badge = { CONSERVADO: '<span class="badge keep">✔ conservado</span>', REVERTIDO: '<span class="badge rev">↩ revertido</span>',
-    RESTRICCION: '<span class="badge blk">⛔ restricciones</span>', INVALIDO: '<span class="badge inv">parche inválido</span>', BASELINE: '<span class="badge inv">baseline</span>' };
+  const badge = { CONSERVADO: '<span class="badge keep">se queda</span>', REVERTIDO: '<span class="badge rev">deshecho</span>',
+    RESTRICCION: '<span class="badge blk">tocaba texto protegido</span>', INVALIDO: '<span class="badge inv">no aplicable</span>', BASELINE: '<span class="badge inv">original</span>' };
   $('expbody').innerHTML = S.experiments.map(e =>
     '<tr><td class="mono">' + e.n + '</td><td>' + esc(e.tipo) + '</td><td>' + esc(String(e.hip).slice(0, 160)) + '</td>' +
     '<td class="diffcell">' + diffHTML(e.diff) + '</td>' +
@@ -1160,14 +1502,14 @@ function drawLines(canvas, series, opts = {}) {
 }
 function renderCharts() {
   drawLines($('chScore'), [
-    { name: 'score visible', color: '#0E7C66', data: S.scoreSeries.map(p => p.visible) },
-    { name: 'score oculto', color: '#A9760B', data: S.scoreSeries.map(p => p.oculto) }], { pad: true });
+    { name: 'nota visible', color: '#0E7C66', data: S.scoreSeries.map(p => p.visible) },
+    { name: 'nota oculta', color: '#A9760B', data: S.scoreSeries.map(p => p.oculto) }], { pad: true });
   const eff = S.scoreSeries.map(p => p.usd > 0 && S.baselineEval ? +((p.visible - S.baselineEval.total) / p.usd).toFixed(3) : null);
-  drawLines($('chEff'), [{ name: 'Δscore acumulado / $', color: '#1B2430', data: eff }], { pad: true });
+  drawLines($('chEff'), [{ name: 'mejora acumulada por dólar', color: '#1B2430', data: eff }], { pad: true });
 }
 function renderCritCompare() {
   if (!S.baselineEval || !S.lastEval) { $('critcompare').innerHTML = '<p class="hint">Pendiente de ejecución.</p>'; return; }
-  $('critcompare').innerHTML = '<div class="tablewrap"><table class="exp" style="min-width:0"><thead><tr><th>Criterio</th><th>Inicial</th><th>Final</th><th>Δ</th></tr></thead><tbody>' +
+  $('critcompare').innerHTML = '<div class="tablewrap"><table class="exp" style="min-width:0"><thead><tr><th>Criterio</th><th>Antes</th><th>Después</th><th>Cambio</th></tr></thead><tbody>' +
     S.rubric.map((c, i) => { const id = 'C' + (i + 1), a = S.baselineEval.scores[id], b = S.lastEval.scores[id], d = +(b - a).toFixed(1);
       return '<tr><td>' + id + ' ' + esc(c.nombre) + (c.oculto ? ' <span class="pill">oculto</span>' : '') + '</td><td class="mono">' + a + '</td><td class="mono">' + b + '</td><td class="mono" style="color:' + (d > 0 ? 'var(--accent)' : d < 0 ? 'var(--revert)' : 'inherit') + '">' + (d > 0 ? '+' : '') + d + '</td></tr>'; }).join('') + '</tbody></table></div>';
 }
@@ -1176,17 +1518,17 @@ function renderGamingAlert() {
   if (pts.length < 3) { $('gamingalert').innerHTML = ''; return; }
   const visUp = pts[pts.length - 1].visible - pts[0].visible, hidDn = pts[pts.length - 1].oculto - pts[0].oculto;
   $('gamingalert').innerHTML = (visUp > 0.3 && hidDn < -0.3)
-    ? '<div class="notice warn">⚠️ <b>Posible gaming de la métrica:</b> el score visible sube (+' + visUp.toFixed(2) + ') mientras el oculto baja (' + hidDn.toFixed(2) + '). Revisa los diffs conservados: el experimentador podría estar optimizando el juez, no el documento.</div>' : '';
+    ? '<div class="notice warn"><b>Posible trampa:</b> la nota visible sube (+' + visUp.toFixed(2) + ') mientras la de los criterios ocultos baja (' + hidDn.toFixed(2) + '). Revisa los cambios conservados: el agente podría estar complaciendo al evaluador en lugar de mejorar el documento.</div>' : '';
 }
 function renderFinal() {
   if (!S.finalDoc) return;
   $('btnDownload').disabled = false;
   const best = S.bestNodeId ? nodeById(S.bestNodeId) : (S.nodes.length ? bestNode() : null);
   const lin = best ? lineage(best).filter(n => n.status === 'kept') : [];
-  $('docstats').textContent = S.finalDoc.length.toLocaleString() + ' caracteres · linaje ganador ' + (best ? '[' + best.id + ']' : '') + ' con ' + lin.length + ' cambios conservados';
+  $('docstats').textContent = S.finalDoc.length.toLocaleString('es') + ' caracteres · ' + lin.length + ' cambio(s) conservado(s) · nota ' + (best && best.ev ? best.ev.total : '—') + ' (original ' + (S.baselineEval ? S.baselineEval.total : '—') + ')';
   $('finaldiff').innerHTML = lin.length
-    ? '<p class="hint">Ruta del baseline al mejor nodo (cada paso superó las tres puertas):</p>' + lin.map(k => '<div class="card"><b>[' + k.id + '] iter ' + k.iter + ' · ' + k.ev.total + '/10:</b> ' + esc(k.hip) + diffHTML(k.patches).replace('<details class="dif"><summary>', '<details class="dif" open><summary>') + '</div>').join('')
-    : '<p class="hint">Ningún cambio superó las tres puertas: el documento final es el original.</p>';
+    ? '<p class="hint">Del original a la mejor versión, en orden. Cada cambio superó los tres filtros.</p>' + lin.map(k => '<div class="card"><b>[' + k.id + '] iter ' + k.iter + ' · ' + k.ev.total + '/10:</b> ' + esc(k.hip) + diffHTML(k.patches).replace('<details class="dif"><summary>', '<details class="dif" open><summary>') + '</div>').join('')
+    : '<p class="hint">Ningún cambio superó los tres filtros: el documento final es el original.</p>';
   const ft = $('finaltext'); ft.style.display = 'block'; ft.textContent = S.finalDoc;
 }
 
@@ -1195,7 +1537,7 @@ const NODE_COLOR = { root: '#13201C', kept: '#0E7C66', reverted: '#C2452D', inva
 function renderGraph() {
   const cv = $('chGraph'); if (!cv) return;
   const ctx = cv.getContext('2d');
-  if (!S.nodes.length) { ctx.clearRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#4A5568'; ctx.font = '12px IBM Plex Mono'; ctx.fillText('El grafo de experimentos aparecerá aquí al ejecutar.', 20, 30); return; }
+  if (!S.nodes.length) { ctx.clearRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#4A5568'; ctx.font = '12px IBM Plex Mono'; ctx.fillText('El grafo de intentos aparecerá aquí.', 20, 30); return; }
   // profundidad por nodo
   const depth = {}; S.nodes.forEach(n => { let d = 0, x = n; while (x && x.parent != null) { d++; x = nodeById(x.parent); } depth[n.id] = d; });
   const maxD = Math.max(...Object.values(depth));
@@ -1229,19 +1571,19 @@ function renderGraphOps() {
   const lin = best ? lineage(best) : [];
   el.innerHTML =
     '<div class="statbar">' +
-    '<div><b>' + S.nodes.length + '</b><span>nodos totales</span></div>' +
+    '<div><b>' + S.nodes.length + '</b><span>intentos</span></div>' +
     '<div><b>' + (R.length - 1) + '</b><span>conservados</span></div>' +
-    '<div><b>' + S.nodes.filter(n => n.status === 'reverted').length + '</b><span>evidencia (revertidos)</span></div>' +
-    '<div><b>' + L.length + '</b><span>hojas (frontera)</span></div>' +
-    '<div><b>' + (best ? best.ev.total : '—') + '</b><span>mejor score [' + (best ? best.id : '—') + ']</span></div>' +
+    '<div><b>' + S.nodes.filter(n => n.status === 'reverted').length + '</b><span>deshechos (se recuerdan)</span></div>' +
+    '<div><b>' + L.length + '</b><span>ramas abiertas</span></div>' +
+    '<div><b>' + (best ? best.ev.total : '—') + '</b><span>mejor nota [' + (best ? best.id : '—') + ']</span></div>' +
     '</div>' +
-    '<p class="hint"><b>Linaje ganador:</b> ' + (lin.length ? lin.map(n => n.id).join(' → ') : '—') + '</p>' +
-    '<p class="hint"><b>Frontera sin explorar (hojas):</b> ' + (L.length ? L.map(n => n.id + ' (' + n.ev.total + ')').join(' · ') : '—') + '</p>' +
-    '<div class="leyenda">' + Object.entries({ root: 'baseline', kept: 'conservado', reverted: 'revertido (evidencia)', blocked: 'restricción', invalid: 'parche inválido' }).map(([k, v]) => '<span><i style="background:' + NODE_COLOR[k] + '"></i>' + v + '</span>').join('') + '</div>';
+    '<p class="hint"><b>Camino de la mejor versión:</b> ' + (lin.length ? lin.map(n => n.id).join(' → ') : '—') + '</p>' +
+    '<p class="hint"><b>Ramas por explorar:</b> ' + (L.length ? L.map(n => n.id + ' (' + n.ev.total + ')').join(' · ') : '—') + '</p>' +
+    '<div class="leyenda">' + Object.entries({ root: 'original', kept: 'se queda', reverted: 'deshecho', blocked: 'tocaba texto protegido', invalid: 'cambio no aplicable' }).map(([k, v]) => '<span><i style="background:' + NODE_COLOR[k] + '"></i>' + v + '</span>').join('') + '</div>';
 }
 function renderKG() {
   const el = $('kgout'); if (!el) return;
-  if (!S.kg) { el.innerHTML = '<p class="hint">🕸 Actívalo en Configuración para extraer el world model del documento (entidades y afirmaciones con su apoyo). Sirve para que el Experimentador priorice reforzar las afirmaciones sin evidencia.</p>'; return; }
+  if (!S.kg) { el.innerHTML = '<p class="hint">Actívalo en los ajustes avanzados del paso 3: se extraen las afirmaciones del documento y el agente prioriza reforzar las que no tienen apoyo.</p>'; return; }
   const sin = S.kg.afirmaciones.filter(a => !a.apoyada);
   el.innerHTML = '<div class="grid2"><div><h3 style="margin-top:0">Entidades (' + S.kg.entidades.length + ')</h3>' +
     S.kg.entidades.map(e => '<span class="pill" style="margin:2px;display:inline-block">' + esc(e.nombre) + ' · ' + esc(e.tipo) + '</span>').join(' ') + '</div>' +
@@ -1253,7 +1595,7 @@ function renderSearches() {
   $('searchlist').innerHTML = S.searches.length ? S.searches.map(s =>
     '<div class="card"><b class="mono">iter ' + s.iter + '</b> · consulta: <i>' + esc(s.query) + '</i>' +
     s.fuentes.map(f => '<div class="srcitem"><span class="pill">' + esc(f.src) + '</span> <a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.titulo) + '</a><br><span class="hint">' + esc(f.snippet) + '</span></div>').join('') + '</div>').join('')
-    : '<p class="hint">🔍 Las búsquedas realizadas durante el loop aparecerán aquí.</p>';
+    : '<p class="hint">Si activas la búsqueda de evidencia, aquí verás las fuentes consultadas en cada ronda.</p>';
 }
 
 /* ══════════════ Agentes & Prompts ══════════════ */
@@ -1280,7 +1622,7 @@ function renderAgents() {
 function savePrompts() {
   document.querySelectorAll('#agentboxes textarea').forEach(t => PROMPTS[t.dataset.p] = t.value);
   localStorage.setItem(LS.prompts, JSON.stringify(PROMPTS));
-  alert('Prompts guardados. Se aplican en la siguiente ejecución.');
+  toast('Prompts guardados. Se aplican en la siguiente ejecución.');
 }
 
 /* ══════════════ Meta-agente ══════════════ */
@@ -1340,7 +1682,7 @@ function restoreSession() {
 
 /* ══════════════ Carga de documento ══════════════ */
 function showDocInfo() {
-  $('docinfo').textContent = '✅ ' + S.doc.name + ' — ' + S.doc.text.length.toLocaleString() + ' caracteres';
+  $('docinfo').textContent = '✅ ' + S.doc.name + ' — ' + S.doc.text.length.toLocaleString('es') + ' caracteres';
   const pv = $('docpreview'); pv.style.display = 'block';
   pv.textContent = S.doc.text.slice(0, 600) + (S.doc.text.length > 600 ? '…' : '');
   estimar();
@@ -1349,8 +1691,10 @@ async function parseFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   let text = '';
   if (ext === 'txt' || ext === 'md') text = await file.text();
-  else if (ext === 'docx') { const ab = await file.arrayBuffer(); text = (await window.mammoth.extractRawText({ arrayBuffer: ab })).value; }
+  else if (ext === 'docx') { if (!window.mammoth) await cargaLib(['https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js','https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js']); const ab = await file.arrayBuffer(); text = (await window.mammoth.extractRawText({ arrayBuffer: ab })).value; }
   else if (ext === 'pdf') {
+    if (!window.pdfjsLib) await cargaLib(['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js']);
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const ab = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: ab }).promise;
     const parts = [];
@@ -1366,7 +1710,7 @@ async function loadFile(file) {
     const text = await parseFile(file);
     S.doc = { name: file.name, text };
     S.finalDoc = null; showDocInfo(); saveSession();
-  } catch (e) { alert('Error al leer el archivo: ' + e.message); }
+  } catch (e) { toast('Error al leer el archivo: ' + e.message); }
 }
 async function loadRefFile(file) {
   const info = $('refinfo');
@@ -1455,7 +1799,7 @@ function init() {
     Object.entries(S.graphPos).forEach(([id, p]) => { const d = (p.x - mx) ** 2 + (p.y - my) ** 2; if (d < 200 && d < best) { best = d; hit = id; } });
     if (hit) { const n = nodeById(hit);
       $('nodedetail').innerHTML = '<div class="card"><b>[' + n.id + ']</b> ' + (n.parent != null ? 'ramificado de [' + n.parent + ']' : 'raíz') + ' · <span class="badge ' + ({ kept: 'keep', root: 'keep', reverted: 'rev', blocked: 'blk', invalid: 'inv' }[n.status]) + '">' + n.status + '</span>' + (n.ev ? ' · score ' + n.ev.total : '') +
-        '<br><b>Hipótesis:</b> ' + esc(n.hip) + (n.patches ? diffHTML(n.patches) : '') + '</div>'; }
+        '<br><b>Qué se intentó:</b> ' + esc(n.hip) + (n.patches ? diffHTML(n.patches) : '') + '</div>'; }
   });
   // params → estimación
   ['pObjetivo','pMaxIter','pMargen','pEpsilon','pK','pN','pM','pMed','pModEval','pModExp'].forEach(id => $(id).addEventListener('change', () => {
@@ -1483,7 +1827,94 @@ function init() {
   }
   estimar(); renderCost();
 }
-document.addEventListener('DOMContentLoaded', init);
+
+
+
+/* ══════════════════════════════════════════════════════════
+   AutoResearchGraph 2.0 · capa de uso (Forja)
+   ══════════════════════════════════════════════════════════ */
+const ico = n => `<svg class="i"><use href="#i-${n}"/></svg>`;
+function toast(m, ms){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms || 3600); }
+function cargaLib(urls){ return urls.reduce((p,u) => p.catch(() => new Promise((ok,ko) => { const s = document.createElement('script'); s.src = u; s.onload = ok; s.onerror = () => { s.remove(); ko(); }; document.head.appendChild(s); })), Promise.reject()).catch(() => { throw new Error('No se pudo cargar una librería: ¿hay conexión?'); }); }
+
+/* ── navegación ── */
+let step = 0;
+const STEPS = ['Inicio','Documento','Criterios','Mejorar','Resultado'];
+function buildStepper(){ $('stepper').innerHTML = STEPS.map((s,i) => `${i ? `<span class="sline${i <= step ? ' on' : ''}"></span>` : ''}<button class="sdot" type="button" data-go="${i}" data-state="${i < step ? 'done' : i === step ? 'now' : ''}" ${i === step ? 'aria-current="step"' : ''}><span class="n">${i < step ? ico('check') : i === 0 ? ico('refresh') : i}</span><span class="lbl">${s}</span></button>`).join(''); document.querySelectorAll('#stepper [data-go]').forEach(b => b.onclick = () => go(+b.dataset.go)); }
+function go(i){
+  step = i; document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', +s.dataset.step === i)); $('progBar').style.width = (i / 4 * 100) + '%';
+  if(i === 3){ renderResumen(); renderValidacion(validar()); estimar(); renderCharts(); }
+  if(i === 4){ renderFinal(); renderCritCompare(); renderGraph(); renderGraphOps(); renderCharts(); }
+  buildStepper(); updateNav(); window.scrollTo({top:0, behavior:'instant'});
+}
+const HINTS = ['Mira primero una <b>mejora completa</b>: no necesita clave.', 'Protege las cifras y nombres que no deben cambiar.', 'Pocos criterios, claros e independientes.', 'Puedes detenerlo cuando quieras: se conserva la mejor versión.', 'Revisa cada cambio antes de usar el documento.'];
+function updateNav(){ $('navBack').classList.toggle('hidden', step === 0); $('navNextTxt').textContent = ['Empezar','Siguiente: los criterios','Siguiente: mejorar', S.running ? 'Mejorando…' : S.finalDoc ? 'Ver el resultado' : 'Empezar la mejora','Mejorar otro documento'][step]; $('navHint').innerHTML = HINTS[step]; }
+$('navBack').onclick = () => { if(step > 0) go(step - 1); };
+$('navNext').onclick = () => {
+  if(step === 0) return go(1);
+  if(step === 1){ if(!S.doc) return toast('Carga o pega antes el documento'); if(!S.rubric.length){ const t = S._tplSug || 'academica'; selTpl(t); } return go(2); }
+  if(step === 2){ const w = S.rubric.filter(c => !c.oculto).reduce((a,c) => a + (+c.peso || 0), 0); if(!S.rubric.filter(c => !c.oculto).length) return toast('Elige un tipo de documento o añade criterios'); if(w !== 100) return toast('Los pesos suman ' + w + ' %: pulsa «Repartir pesos» o ajústalos a 100 %'); return go(3); }
+  if(step === 3){ if(S.running) return; if(S.finalDoc && !S._nuevaTanda) return go(4); const v = validar(); renderValidacion(v); if(!v.ok) return toast(v.errs[0]); return $('btnStart').click(); }
+  if(step === 4){ if(S.running) return; if(!confirm('¿Mejorar otro documento? La mejora actual se pierde si no la has descargado.')) return; Object.assign(S, {doc:null, rubric:[], experiments:[], searches:[], history:[], scoreSeries:[], nodes:[], kg:null, bestNodeId:null, finalDoc:null, baselineEval:null, lastEval:null, tplSel:null, _demo:false}); $('restricciones').value = ''; $('docinfo').textContent = ''; $('docpreview').style.display = 'none'; renderTpls(); renderRubric(); renderExpTable(); $('livelog').textContent = 'Esperando…'; go(1); }
+};
+$('goHome').onclick = () => go(0);
+$('btnGo').onclick = () => go(1);
+
+/* ── la mejora lleva al resultado ── */
+const _run = runLoop;
+runLoop = async function(){ S._demo = false; S._nuevaTanda = false; updateNav(); const l = document.querySelector('#livelog'); l.closest('details').open = true; await _run(); updateNav(); if(S.finalDoc && S.baselineEval){ toast('Terminado: nota ' + S.baselineEval.total + ' → ' + (bestNode() ? bestNode().ev.total : '—'), 5000); setTimeout(() => go(4), 900); } };
+const _save = saveSession; saveSession = function(){ if(!S._demo) _save(); };
+
+/* ── intensidades ── */
+const PRESETS = {
+  rapida:{t:'Rápida', d:'Pocas rondas, una propuesta cada vez. Para probar o para textos cortos.', v:{pMaxIter:4, pK:'1', pMed:'3', pN:0, pM:3, pStrategy:'greedy'}, kg:false},
+  equilibrada:{t:'Equilibrada', d:'Dos propuestas por ronda y un cambio de estructura de vez en cuando. La opción por defecto.', v:{pMaxIter:8, pK:'2', pMed:'3', pN:4, pM:4, pStrategy:'frontier'}, kg:false},
+  fondo:{t:'A fondo', d:'Más rondas y propuestas, explora varias ramas y prioriza las afirmaciones sin apoyo.', v:{pMaxIter:15, pK:'3', pMed:'3', pN:3, pM:6, pStrategy:'beam', pBeam:3}, kg:true}
+};
+let preset = 'equilibrada';
+function setPreset(k){ preset = k; const p = PRESETS[k]; Object.entries(p.v).forEach(([id,v]) => { $(id).value = v; }); $('kgOn').checked = p.kg; $('pBeamWrap').style.display = $('pStrategy').value === 'beam' ? 'block' : 'none'; estimar(); renderResumen(); pintaPresets(); }
+function pintaPresets(){ $('presets').innerHTML = Object.entries(PRESETS).map(([k,p]) => `<button type="button" data-p="${k}" aria-pressed="${preset === k}"><b>${p.t}</b><small>${p.d}</small><span class="pc">hasta ${p.v.pMaxIter} rondas · ${p.v.pK} propuesta(s)</span></button>`).join(''); document.querySelectorAll('#presets [data-p]').forEach(b => b.onclick = () => { if(!S.running) setPreset(b.dataset.p); }); }
+['pObjetivo','pMaxIter','pMargen','pEpsilon','pK','pN','pM','pMed','pModEval','pModExp','pStrategy','wsOn','kgOn'].forEach(id => $(id).addEventListener('change', () => { renderResumen(); renderValidacion(validar()); }));
+
+/* ── documento: pegar, ejemplos y tipo sugerido ── */
+function limpiaEjecucion(){ Object.assign(S, {experiments:[], searches:[], history:[], scoreSeries:[], nodes:[], kg:null, bestNodeId:null, finalDoc:null, baselineEval:null, lastEval:null, cost:{calls:0, tin:0, tout:0, usd:0}, _demo:false}); ['stIter','stScore','stKeeps','stNodes','stEff'].forEach(id => $(id).textContent = '—'); $('livelog').textContent = 'Esperando…'; $('gamingalert').innerHTML = ''; $('finaldiff').innerHTML = '<p class="hint">Aparecerán al terminar.</p>'; $('finaltext').style.display = 'none'; $('docstats').textContent = ''; $('btnDownload').disabled = true; renderExpTable(); renderCharts(); renderGraph(); renderGraphOps(); renderCritCompare(); renderCost(); }
+function usaTexto(nombre, texto){ limpiaEjecucion(); S.doc = {name:nombre, text:texto.trim()}; showDocInfo(); saveSession(); }
+const _load = loadFile; loadFile = async function(f){ limpiaEjecucion(); await _load(f); };
+$('btnPegar').onclick = () => { const t = $('pegado').value.trim(); if(t.length < 200) return toast('Pega un texto algo más largo'); usaTexto('texto_pegado.md', t); $('pegado').value = ''; toast('Documento listo'); };
+function selTpl(k){ const b = [...document.querySelectorAll('#tpls button')].find(x => x.textContent.includes(TEMPLATES[k].nombre)); if(b) b.click(); }
+const EJEMPLOS = [{"t": "Propuesta de proyecto", "d": "Resumen para una convocatoria, con objetivos vagos", "nombre": "propuesta_hipertension.md", "tpl": "grant", "texto": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nEl objetivo es mejorar la adherencia. También queremos que los pacientes estén más contentos y que los médicos trabajen mejor.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después la probaremos con pacientes durante un tiempo y veremos si funciona.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal, material y viajes.\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria.", "restr": "120.000 €\n36 meses\nDra. Marta Ruiz"}, {"t": "Informe técnico", "d": "Consumo energético de un edificio, conclusiones genéricas", "nombre": "informe_energia.md", "tpl": "informe", "texto": "Informe técnico: consumo energético del edificio de la Facultad de Ciencias (2025)\n\n1. Introducción\nEste informe analiza el consumo de energía del edificio durante el año 2025 y propone medidas.\n\n2. Datos\nEl consumo eléctrico total fue de 412.600 kWh, un 8 % más que en 2024. La climatización supuso el 46 % del total y la iluminación el 21 %. El pico mensual se produjo en julio, con 51.300 kWh. El edificio permanece encendido los fines de semana aunque apenas se usa.\n\n3. Análisis\nEl consumo ha subido bastante. Parece que la climatización es la principal causa. También hay que tener en cuenta la iluminación, que es mejorable.\n\n4. Conclusiones\nHay que ahorrar energía. Se recomienda concienciar al personal y revisar las instalaciones cuando sea posible.", "restr": "412.600 kWh\n8 %\n46 %\n21 %\n51.300 kWh"}];
+$('ejs').innerHTML = EJEMPLOS.map((e,i) => `<button type="button" data-ej="${i}"><b>${esc(e.t)}</b><small>${esc(e.d)}</small></button>`).join('');
+document.querySelectorAll('#ejs [data-ej]').forEach(b => b.onclick = () => { const e = EJEMPLOS[+b.dataset.ej]; usaTexto(e.nombre, e.texto); $('restricciones').value = e.restr; $('restrinfo').textContent = 'Protegidos los importes, plazos y cifras del ejemplo.'; S._tplSug = e.tpl; selTpl(e.tpl); toast('Ejemplo cargado, con sus criterios y sus textos protegidos'); });
+
+/* ── mejora de muestra, sin clave ── */
+const DEMO = {"doc": {"name": "propuesta_hipertension.md", "text": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nEl objetivo es mejorar la adherencia. También queremos que los pacientes estén más contentos y que los médicos trabajen mejor.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después la probaremos con pacientes durante un tiempo y veremos si funciona.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal, material y viajes.\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}, "rubric": [{"nombre": "Impacto y novedad", "desc": "Contribución diferencial clara frente al estado del arte", "peso": 30, "oculto": false}, {"nombre": "Viabilidad", "desc": "Plan de trabajo realista, hitos medibles, riesgos identificados", "peso": 25, "oculto": false}, {"nombre": "Adecuación a la convocatoria", "desc": "Responde explícitamente a los criterios del evaluador externo", "peso": 25, "oculto": false}, {"nombre": "Presupuesto y recursos", "desc": "Justificación económica coherente con las actividades", "peso": 20, "oculto": false}, {"nombre": "Concisión y ausencia de relleno", "desc": "Penaliza verborrea, secciones formulaicas, jerga hueca y longitud injustificada. Un documento más largo no es mejor.", "peso": 0, "oculto": true}], "experiments": [{"n": 0, "node": "n0", "base": "—", "tipo": "baseline", "hip": "Original", "diff": null, "antes": "—", "despues": 5.1, "rango": 0.3, "gates": null, "res": "BASELINE", "fuentes": []}, {"n": 1, "node": "n1", "base": "n0", "tipo": "local", "hip": "Convertir los objetivos en metas medibles con una variable principal y un plazo", "diff": [{"buscar": "El objetivo es mejorar la adherencia. También queremos que los pacientes estén más contentos y que los médicos trabajen mejor.", "reemplazar": "Objetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados."}], "antes": 5.1, "despues": 5.71, "rango": 0.2, "gates": {"ok": true, "g1": true, "g2": true, "g2crit": null, "g3": true, "delta": 0.61, "juicio": {"wins": 3, "votos": []}}, "res": "CONSERVADO", "fuentes": []}, {"n": 2, "node": "n2", "base": "n1", "tipo": "local", "hip": "Reforzar el impacto con un párrafo de contexto sobre la transformación digital", "diff": [{"buscar": "Creemos que tendrá un gran impacto.", "reemplazar": "En el contexto actual de transformación digital de la sanidad, caracterizado por un paradigma disruptivo de empoderamiento del paciente y un ecosistema de soluciones mHealth en continua evolución, resulta imprescindible abordar de forma holística y sinérgica los múltiples retos que plantea la adherencia terapéutica, un fenómeno complejo y multidimensional."}], "antes": 5.71, "despues": 5.86, "rango": 0.4, "gates": {"ok": false, "g1": true, "g2": false, "g2crit": "C5", "g3": null, "delta": 0.15, "juicio": null}, "res": "REVERTIDO", "fuentes": []}, {"n": 3, "node": "n3", "base": "n1", "tipo": "local", "hip": "Concretar el diseño de la evaluación: ensayo pragmático, muestra, seguimiento y variable principal", "diff": [{"buscar": "Después la probaremos con pacientes durante un tiempo y veremos si funciona.", "reemplazar": "Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar."}], "antes": 5.71, "despues": 6.19, "rango": 0.2, "gates": {"ok": true, "g1": true, "g2": true, "g2crit": null, "g3": true, "delta": 0.48, "juicio": {"wins": 3, "votos": []}}, "res": "CONSERVADO", "fuentes": []}, {"n": 4, "node": "n4", "base": "n3", "tipo": "estructural", "hip": "Uniformar el formato de los años del plan de trabajo", "diff": [{"buscar": "año", "reemplazar": "Año"}], "antes": 6.19, "despues": "—", "rango": "—", "gates": null, "res": "INVALIDO", "fuentes": []}, {"n": 5, "node": "n5", "base": "n3", "tipo": "local", "hip": "Desglosar el presupuesto y ligar cada partida a una actividad", "diff": [{"buscar": "que se destinarán a personal, material y viajes.", "reemplazar": "que se destinarán a personal (un desarrollador a media jornada durante 24 meses y una enfermera investigadora durante el ensayo), material (licencias, servidores y dispositivos de prueba) y viajes (difusión de resultados en dos congresos)."}], "antes": 6.19, "despues": 6.59, "rango": 0.2, "gates": {"ok": true, "g1": true, "g2": true, "g2crit": null, "g3": true, "delta": 0.4, "juicio": {"wins": 2, "votos": []}}, "res": "CONSERVADO", "fuentes": []}, {"n": 6, "node": "n6", "base": "n5", "tipo": "local", "hip": "Ajustar la cuantía solicitada a las nuevas partidas", "diff": [{"buscar": "Solicitamos 120.000 €", "reemplazar": "Solicitamos 150.000 €"}], "antes": 6.59, "despues": "—", "rango": "—", "gates": null, "res": "RESTRICCION", "fuentes": []}, {"n": 7, "node": "n7", "base": "n5", "tipo": "local", "hip": "Sustituir los adjetivos del resumen por la aportación concreta frente a las aplicaciones existentes", "diff": [{"buscar": "Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.", "reemplazar": "Proponemos una aplicación móvil que integra los recordatorios con la receta electrónica del centro de salud, de modo que el médico ve cuándo el paciente deja de retirar la medicación. A diferencia de las aplicaciones de recordatorio existentes, cierra el circuito con el profesional y se evaluará con un ensayo aleatorizado."}], "antes": 6.59, "despues": 7.07, "rango": 0.3, "gates": {"ok": true, "g1": true, "g2": true, "g2crit": null, "g3": true, "delta": 0.48, "juicio": {"wins": 3, "votos": []}}, "res": "CONSERVADO", "fuentes": []}], "searches": [], "scoreSeries": [{"iter": 0, "visible": 5.1, "oculto": 6.0, "usd": 0.004}, {"iter": 1, "visible": 5.71, "oculto": 6.1, "usd": 0.011}, {"iter": 2, "visible": 5.71, "oculto": 6.1, "usd": 0.019}, {"iter": 3, "visible": 6.19, "oculto": 6.2, "usd": 0.027}, {"iter": 4, "visible": 6.19, "oculto": 6.2, "usd": 0.031}, {"iter": 5, "visible": 6.59, "oculto": 6.2, "usd": 0.04}, {"iter": 6, "visible": 6.59, "oculto": 6.2, "usd": 0.043}, {"iter": 7, "visible": 7.07, "oculto": 6.9, "usd": 0.052}], "cost": {"calls": 64, "tin": 151000, "tout": 20400, "usd": 0.052}, "finalDoc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Proponemos una aplicación móvil que integra los recordatorios con la receta electrónica del centro de salud, de modo que el médico ve cuándo el paciente deja de retirar la medicación. A diferencia de las aplicaciones de recordatorio existentes, cierra el circuito con el profesional y se evaluará con un ensayo aleatorizado.\n\nObjetivos\nObjetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal (un desarrollador a media jornada durante 24 meses y una enfermera investigadora durante el ensayo), material (licencias, servidores y dispositivos de prueba) y viajes (difusión de resultados en dos congresos).\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria.", "nodes": [{"id": "n0", "parent": null, "hip": "Baseline", "tipo": "root", "patches": null, "ev": {"scores": {"C1": 5.0, "C2": 4.5, "C3": 5.5, "C4": 5.5, "C5": 6.0}, "total": 5.1, "hidden": 6.0, "rango": 0.3, "criterioBajo": "C2", "criterioBajoNombre": "Viabilidad", "razon": "Los objetivos no son medibles y no hay hitos ni riesgos."}, "status": "root", "iter": 0, "sources": [], "doc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nEl objetivo es mejorar la adherencia. También queremos que los pacientes estén más contentos y que los médicos trabajen mejor.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después la probaremos con pacientes durante un tiempo y veremos si funciona.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal, material y viajes.\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}, {"id": "n1", "parent": "n0", "hip": "Convertir los objetivos en metas medibles con una variable principal y un plazo", "tipo": "local", "patches": [{"buscar": "El objetivo es mejorar la adherencia. También queremos que los pacientes estén más contentos y que los médicos trabajen mejor.", "reemplazar": "Objetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados."}], "ev": {"scores": {"C1": 5.2, "C2": 6.0, "C3": 6.2, "C4": 5.5, "C5": 6.1}, "total": 5.71, "hidden": 6.1, "rango": 0.2, "criterioBajo": "C1", "criterioBajoNombre": "Impacto y novedad", "razon": "El resumen usa adjetivos sin concretar la aportación frente a otras aplicaciones."}, "status": "kept", "iter": 1, "sources": [], "doc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nObjetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después la probaremos con pacientes durante un tiempo y veremos si funciona.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal, material y viajes.\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}, {"id": "n2", "parent": "n1", "hip": "Reforzar el impacto con un párrafo de contexto sobre la transformación digital", "tipo": "local", "patches": [{"buscar": "Creemos que tendrá un gran impacto.", "reemplazar": "En el contexto actual de transformación digital de la sanidad, caracterizado por un paradigma disruptivo de empoderamiento del paciente y un ecosistema de soluciones mHealth en continua evolución, resulta imprescindible abordar de forma holística y sinérgica los múltiples retos que plantea la adherencia terapéutica, un fenómeno complejo y multidimensional."}], "ev": {"scores": {"C1": 5.6, "C2": 6.0, "C3": 6.3, "C4": 5.5, "C5": 4.6}, "total": 5.86, "hidden": 4.6, "rango": 0.4, "criterioBajo": "C1", "criterioBajoNombre": "Impacto y novedad", "razon": "—"}, "status": "reverted", "iter": 2, "sources": []}, {"id": "n3", "parent": "n1", "hip": "Concretar el diseño de la evaluación: ensayo pragmático, muestra, seguimiento y variable principal", "tipo": "local", "patches": [{"buscar": "Después la probaremos con pacientes durante un tiempo y veremos si funciona.", "reemplazar": "Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar."}], "ev": {"scores": {"C1": 5.3, "C2": 7.2, "C3": 6.8, "C4": 5.5, "C5": 6.2}, "total": 6.19, "hidden": 6.2, "rango": 0.2, "criterioBajo": "C4", "criterioBajoNombre": "Presupuesto y recursos", "razon": "El presupuesto no desglosa partidas ni las relaciona con las actividades."}, "status": "kept", "iter": 3, "sources": [], "doc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nObjetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal, material y viajes.\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}, {"id": "n4", "parent": "n3", "hip": "Uniformar el formato de los años del plan de trabajo", "tipo": "local", "patches": [{"buscar": "año", "reemplazar": "Año"}], "ev": null, "status": "invalid", "iter": 4, "sources": []}, {"id": "n5", "parent": "n3", "hip": "Desglosar el presupuesto y ligar cada partida a una actividad", "tipo": "local", "patches": [{"buscar": "que se destinarán a personal, material y viajes.", "reemplazar": "que se destinarán a personal (un desarrollador a media jornada durante 24 meses y una enfermera investigadora durante el ensayo), material (licencias, servidores y dispositivos de prueba) y viajes (difusión de resultados en dos congresos)."}], "ev": {"scores": {"C1": 5.4, "C2": 7.3, "C3": 7.0, "C4": 7.0, "C5": 6.2}, "total": 6.59, "hidden": 6.2, "rango": 0.2, "criterioBajo": "C1", "criterioBajoNombre": "Impacto y novedad", "razon": "El resumen no explica qué aporta la aplicación frente a las existentes."}, "status": "kept", "iter": 5, "sources": [], "doc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.\n\nObjetivos\nObjetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal (un desarrollador a media jornada durante 24 meses y una enfermera investigadora durante el ensayo), material (licencias, servidores y dispositivos de prueba) y viajes (difusión de resultados en dos congresos).\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}, {"id": "n6", "parent": "n5", "hip": "Ajustar la cuantía solicitada a las nuevas partidas", "tipo": "local", "patches": [{"buscar": "Solicitamos 120.000 €", "reemplazar": "Solicitamos 150.000 €"}], "ev": null, "status": "blocked", "iter": 6, "sources": []}, {"id": "n7", "parent": "n5", "hip": "Sustituir los adjetivos del resumen por la aportación concreta frente a las aplicaciones existentes", "tipo": "local", "patches": [{"buscar": "Nuestro proyecto propone desarrollar una aplicación móvil innovadora y disruptiva que ayudará a los pacientes a tomar su medicación. Creemos que tendrá un gran impacto.", "reemplazar": "Proponemos una aplicación móvil que integra los recordatorios con la receta electrónica del centro de salud, de modo que el médico ve cuándo el paciente deja de retirar la medicación. A diferencia de las aplicaciones de recordatorio existentes, cierra el circuito con el profesional y se evaluará con un ensayo aleatorizado."}], "ev": {"scores": {"C1": 6.8, "C2": 7.3, "C3": 7.2, "C4": 7.0, "C5": 6.9}, "total": 7.07, "hidden": 6.9, "rango": 0.3, "criterioBajo": "C3", "criterioBajoNombre": "Adecuación a la convocatoria", "razon": "No se mencionan los criterios de la convocatoria."}, "status": "kept", "iter": 7, "sources": [], "doc": "Proyecto: aplicación móvil para mejorar la adherencia al tratamiento en pacientes con hipertensión\n\nResumen\nLa hipertensión es un problema muy importante y muy extendido en toda la población. Proponemos una aplicación móvil que integra los recordatorios con la receta electrónica del centro de salud, de modo que el médico ve cuándo el paciente deja de retirar la medicación. A diferencia de las aplicaciones de recordatorio existentes, cierra el circuito con el profesional y se evaluará con un ensayo aleatorizado.\n\nObjetivos\nObjetivo principal: aumentar en 15 puntos porcentuales la proporción de pacientes adherentes (proporción de días cubiertos ≥ 80 %) a los 12 meses de uso de la aplicación, frente a la atención habitual.\nObjetivos secundarios: reducir la presión arterial sistólica media y medir la satisfacción de pacientes y profesionales con cuestionarios validados.\n\nMetodología\nDesarrollaremos la aplicación en colaboración con el Centro de Salud de San Blas. Después se evaluará en un ensayo pragmático aleatorizado por cupos médicos: 240 pacientes con hipertensión y mal cumplimiento terapéutico, 12 meses de seguimiento. La variable principal es la proporción de días cubiertos, obtenida de la receta electrónica; se analizará por intención de tratar.\n\nPlan de trabajo\nPrimer año: desarrollo. Segundo año: prueba. Tercer año: difusión.\n\nPresupuesto\nSolicitamos 120.000 € para 36 meses, que se destinarán a personal (un desarrollador a media jornada durante 24 meses y una enfermera investigadora durante el ensayo), material (licencias, servidores y dispositivos de prueba) y viajes (difusión de resultados en dos congresos).\n\nEquipo\nEl equipo lo dirige la Dra. Marta Ruiz, con experiencia en atención primaria."}], "kg": null, "bestNodeId": "n7", "baselineEval": {"scores": {"C1": 5.0, "C2": 4.5, "C3": 5.5, "C4": 5.5, "C5": 6.0}, "total": 5.1, "hidden": 6.0, "rango": 0.3, "criterioBajo": "C2", "criterioBajoNombre": "Viabilidad", "razon": "Los objetivos no son medibles y no hay hitos ni riesgos."}, "lastEval": {"scores": {"C1": 6.8, "C2": 7.3, "C3": 7.2, "C4": 7.0, "C5": 6.9}, "total": 7.07, "hidden": 6.9, "rango": 0.3, "criterioBajo": "C3", "criterioBajoNombre": "Adecuación a la convocatoria", "razon": "No se mencionan los criterios de la convocatoria."}, "history": [], "restricciones": "120.000 €\n36 meses\nDra. Marta Ruiz"};
+function demo(){
+  if(S.running) return;
+  const d = JSON.parse(JSON.stringify(DEMO));
+  Object.assign(S, {doc:d.doc, rubric:d.rubric, experiments:d.experiments, searches:d.searches, scoreSeries:d.scoreSeries, cost:d.cost, finalDoc:d.finalDoc, nodes:d.nodes, kg:d.kg, bestNodeId:d.bestNodeId, baselineEval:d.baselineEval, lastEval:d.lastEval, history:d.history, tplSel:'grant', _demo:true, _nuevaTanda:false});
+  $('restricciones').value = d.restricciones; showDocInfo(); renderTpls(); renderRubric(); renderExpTable(); renderSearches(); renderKG(); renderCost();
+  $('livelog').textContent = 'Mejora de muestra: no se ha ejecutado ahora. Los números proceden de una ejecución de ejemplo.';
+  $('stIter').textContent = '7/7'; $('stScore').textContent = S.lastEval.total; $('stKeeps').textContent = retained().length - 1; $('stNodes').textContent = S.nodes.length; $('stEff').textContent = ((S.lastEval.total - S.baselineEval.total) / S.cost.usd).toFixed(1);
+  $('btnMeta').disabled = true; go(4); renderGamingAlert();
+  toast('Mejora de muestra de una propuesta de proyecto: mira qué cambios se quedaron y cuáles se deshicieron', 5500);
+}
+$('btnDemo').onclick = demo;
+/* cambiar el documento o los criterios invalida el resultado anterior */
+['restricciones'].forEach(id => $(id).addEventListener('input', () => { S._nuevaTanda = true; }));
+
+/* ── ayuda ── */
+const GLOS = [['Nota','Media ponderada de los criterios visibles, de 1 a 10, que da el evaluador. Se lee varias veces y se toma la mediana.'],['Criterio oculto','Lo puntúa el evaluador pero el agente que cambia el texto no lo conoce. No suma a la nota: sirve para detectar trampas.'],['Los tres filtros','Mejora mínima; ningún criterio empeora más de lo permitido; y un juez que no sabe cuál es la versión nueva la prefiere en 2 de 3 votos.'],['Cambio en forma de parche','El agente devuelve «busca este fragmento, pon este otro». Si el fragmento no aparece exactamente una vez, el cambio no se aplica.'],['Texto protegido','Cifras, nombres o citas que se comprueban con código después de cada cambio.'],['Grafo de intentos','Cada intento es un nodo que parte de una versión anterior. Los deshechos se conservan como aprendizaje.'],['Cambio de estructura','De vez en cuando, en lugar de retocar un fragmento, se reorganiza una sección entera.'],['Coste','Cada ronda llama varias veces a los modelos con el documento entero. La estimación del paso 3 es orientativa.']];
+$('glos').innerHTML = GLOS.map(g => `<div><b>${esc(g[0])}</b><span>${esc(g[1])}</span></div>`).join('');
+$('btnHelp').onclick = () => $('mHelp').classList.add('on');
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if(e.target === m || e.target.hasAttribute('data-close')) m.classList.remove('on'); }));
+
+/* ── arranque ── */
+init();
+const _restore = restoreSession; $('btnRestore').onclick = () => { _restore(); if(S.finalDoc) go(4); else if(S.doc) go(S.rubric.length ? 3 : 2); };
+const _upd = () => { const k = $('apikey').value.trim(); if(k) localStorage.setItem(LS.key, k); };
+$('apikey').addEventListener('input', _upd);
+setPreset('equilibrada'); go(0);
 
 </script>
+</body>
 </html>
